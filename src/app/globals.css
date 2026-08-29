@@ -1,0 +1,129 @@
+@import "tailwindcss";
+
+:root,
+[data-theme="default"] {
+  --bg: #14110e;
+  --bg-card: #1c1814;
+  --text: #f3ece1;
+  --text-dim: #cbbfae;
+  --gold: #d4b07a;
+  --gold-2: #e8c992;
+  --line: rgba(243, 236, 225, 0.12);
+  --header-bg: color-mix(in srgb, var(--bg) 90%, transparent);
+  --piano-stage-bg: #1a1612;
+  --button-bg: var(--gold);
+  --button-text: #14110e;
+  --body-glow-a: rgba(212, 176, 122, 0.12);
+  --body-glow-b: rgba(90, 60, 30, 0.25);
+  --card: var(--bg-card);
+  --cream: var(--text);
+  --dim: var(--text-dim);
+  --gold-hover: var(--gold-2);
+  --background: var(--bg);
+  --foreground: var(--text);
+}
+
+[data-theme="dark"] {
+  --bg: #0b0b0c;
+  --bg-card: #141416;
+  --text: #f5f5f5;
+  --text-dim: #a1a1aa;
+  --gold: #d4b07a;
+  --gold-2: #ead7b0;
+  --line: rgba(255, 255, 255, 0.1);
+  --header-bg: color-mix(in srgb, var(--bg) 90%, transparent);
+  --piano-stage-bg: #101012;
+  --button-bg: var(--gold);
+  --button-text: #0b0b0c;
+  --body-glow-a: rgba(212, 176, 122, 0.08);
+  --body-glow-b: rgba(255, 255, 255, 0.03);
+  --card: var(--bg-card);
+  --cream: var(--text);
+  --dim: var(--text-dim);
+  --gold-hover: var(--gold-2);
+  --background: var(--bg);
+  --foreground: var(--text);
+}
+
+[data-theme="light"] {
+  --bg: #f6f1e8;
+  --bg-card: #ffffff;
+  --text: #16120e;
+  --text-dim: #6f675d;
+  --gold: #9a7438;
+  --gold-2: #7c5c28;
+  --line: rgba(20, 17, 14, 0.12);
+  --header-bg: color-mix(in srgb, var(--bg) 90%, transparent);
+  --piano-stage-bg: #e7e0d4;
+  --button-bg: #16120e;
+  --button-text: #f3ece1;
+  --body-glow-a: rgba(154, 116, 56, 0.1);
+  --body-glow-b: rgba(20, 17, 14, 0.04);
+  --card: var(--bg-card);
+  --cream: var(--text);
+  --dim: var(--text-dim);
+  --gold-hover: var(--gold-2);
+  --background: var(--bg);
+  --foreground: var(--text);
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-card: var(--card);
+  --color-cream: var(--cream);
+  --color-dim: var(--dim);
+  --color-gold: var(--gold);
+  --color-gold-hover: var(--gold-hover);
+  --color-line: var(--line);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-body);
+  --font-display: var(--font-display);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background:
+    radial-gradient(ellipse 80% 50% at 50% -10%, var(--body-glow-a), transparent 55%),
+    radial-gradient(ellipse 60% 40% at 100% 20%, var(--body-glow-b), transparent 50%),
+    var(--bg);
+  color: var(--text);
+  font-family: var(--font-body), system-ui, sans-serif;
+  min-height: 100vh;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--gold) 35%, transparent);
+  color: var(--text);
+}
+
+.font-display {
+  font-family: var(--font-display), Georgia, serif;
+}
+
+.hairline {
+  border-color: var(--line);
+}
+
+.card-surface {
+  background: var(--bg-card);
+  border: 1px solid var(--line);
+}
+
+.piano-stage {
+  background: var(--bg-card);
+  border: 1px solid var(--line);
+}
+
+[data-theme="light"] .piano-stage {
+  background: var(--piano-stage-bg);
+  border-color: color-mix(in srgb, var(--text) 14%, transparent);
+}
+
+.focus-ring:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}

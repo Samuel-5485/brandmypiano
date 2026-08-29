@@ -1,0 +1,29 @@
+{
+  "bids": [
+    {
+      "id": "bid_mteolj1n_boakgg",
+      "spotId": 9,
+      "brandName": "Coffe",
+      "handle": "@sami_diriba",
+      "website": "https://sami.pro.et/",
+      "amount": 20,
+      "deposit": 5,
+      "status": "pending",
+      "createdAt": "2026-08-29T17:55:39.562Z",
+      "updatedAt": "2026-08-29T17:55:39.562Z"
+    },
+    {
+      "id": "bid_mtep2nem_30q6y0",
+      "spotId": 1,
+      "brandName": "Piano brand",
+      "handle": "@sami_diriba",
+      "website": "https://sami.pro.et/",
+      "amount": 5,
+      "deposit": 5,
+      "status": "confirmed",
+      "createdAt": "2026-08-29T18:08:58.366Z",
+      "updatedAt": "2026-08-29T18:08:58.366Z",
+      "note": "Added manually in admin."
+    }
+  ]
+}

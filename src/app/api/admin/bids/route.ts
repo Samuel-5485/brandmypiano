@@ -1,0 +1,304 @@
+import { NextResponse } from "next/server";
+import { CONFIG, getSpot } from "@/config";
+import {
+  buildPublicBoard,
+  calcDeposit,
+  highestConfirmedForSpot,
+  normalizeHandle,
+} from "@/lib/auction";
+import { isAdminAuthenticated } from "@/lib/auth";
+import { newBidId, readBids, withBidsLock } from "@/lib/store";
+import type { Bid, BidStatus } from "@/lib/types";
+
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+async function requireAdmin() {
+  return isAdminAuthenticated();
+}
+
+export async function GET(request: Request) {
+  if (!(await requireAdmin())) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { searchParams } = new URL(request.url);
+  if (searchParams.get("format") === "csv") {
+    const bids = await readBids();
+    const header = [
+      "id",
+      "spotId",
+      "spotName",
+      "brandName",
+      "handle",
+      "website",
+      "amount",
+      "deposit",
+      "status",
+      "createdAt",
+      "updatedAt",
+      "note",
+    ];
+    const rows = bids.map((bid) => {
+      const spot = getSpot(bid.spotId);
+      return [
+        bid.id,
+        bid.spotId,
+        spot?.name ?? "",
+        bid.brandName,
+        bid.handle,
+        bid.website,
+        bid.amount,
+        bid.deposit,
+        bid.status,
+        bid.createdAt,
+        bid.updatedAt,
+        bid.note ?? "",
+      ]
+        .map((cell) => `"${String(cell).replace(/"/g, '""')}"`)
+        .join(",");
+    });
+    const csv = [header.join(","), ...rows].join("\n");
+    return new NextResponse(csv, {
+      headers: {
+        "Content-Type": "text/csv; charset=utf-8",
+        "Content-Disposition": 'attachment; filename="brandmypiano-bids.csv"',
+      },
+    });
+  }
+
+  const bids = await readBids();
+  return NextResponse.json({
+    bids,
+    board: buildPublicBoard(bids),
+    adminNote: CONFIG.adminNote,
+  });
+}
+
+export async function POST(request: Request) {
+  if (!(await requireAdmin())) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  let body: {
+    action?: string;
+    id?: string;
+    spotId?: number;
+    brandName?: string;
+    handle?: string;
+    website?: string;
+    amount?: number;
+    status?: BidStatus;
+    note?: string;
+  };
+
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
+  }
+
+  const action = body.action;
+
+  if (action === "confirm" || action === "reject") {
+    const id = String(body.id ?? "");
+    const outcome = await withBidsLock(async (bids) => {
+      const idx = bids.findIndex((b) => b.id === id);
+      if (idx < 0) return { error: "Bid not found." };
+      const next = [...bids];
+      const target = { ...next[idx] };
+      target.status = action === "confirm" ? "confirmed" : "rejected";
+      target.updatedAt = new Date().toISOString();
+      next[idx] = target;
+
+      // When confirming, demote any other confirmed bids on the same spot that are lower
+      if (action === "confirm") {
+        for (let i = 0; i < next.length; i++) {
+          if (
+            i !== idx &&
+            next[i].spotId === target.spotId &&
+            next[i].status === "confirmed" &&
+            next[i].amount < target.amount
+          ) {
+            next[i] = {
+              ...next[i],
+              status: "rejected",
+              updatedAt: new Date().toISOString(),
+              note:
+                (next[i].note ? next[i].note + " | " : "") +
+                "Outbid — refund deposit manually.",
+            };
+          }
+        }
+      }
+
+      return { result: next[idx], bids: next };
+    });
+
+    if ("error" in outcome) {
+      return NextResponse.json({ error: outcome.error }, { status: 400 });
+    }
+    return NextResponse.json({ ok: true, bid: outcome.result });
+  }
+
+  if (action === "update") {
+    const id = String(body.id ?? "");
+    const outcome = await withBidsLock(async (bids) => {
+      const idx = bids.findIndex((b) => b.id === id);
+      if (idx < 0) return { error: "Bid not found." };
+      const next = [...bids];
+      const current = { ...next[idx] };
+      if (body.brandName !== undefined) current.brandName = String(body.brandName).trim();
+      if (body.handle !== undefined) current.handle = normalizeHandle(String(body.handle));
+      if (body.website !== undefined) current.website = String(body.website).trim();
+      if (body.amount !== undefined) {
+        const amount = Number(body.amount);
+        if (!Number.isFinite(amount) || amount <= 0) return { error: "Invalid amount." };
+        current.amount = amount;
+        current.deposit = calcDeposit(amount);
+      }
+      if (body.status !== undefined) {
+        if (!["pending", "confirmed", "rejected"].includes(body.status)) {
+          return { error: "Invalid status." };
+        }
+        current.status = body.status;
+      }
+      if (body.note !== undefined) current.note = String(body.note);
+      if (body.spotId !== undefined) {
+        if (!getSpot(Number(body.spotId))) return { error: "Unknown spot." };
+        current.spotId = Number(body.spotId);
+      }
+      current.updatedAt = new Date().toISOString();
+      next[idx] = current;
+      return { result: current, bids: next };
+    });
+
+    if ("error" in outcome) {
+      return NextResponse.json({ error: outcome.error }, { status: 400 });
+    }
+    return NextResponse.json({ ok: true, bid: outcome.result });
+  }
+
+  if (action === "create") {
+    const spotId = Number(body.spotId);
+    if (!getSpot(spotId)) {
+      return NextResponse.json({ error: "Unknown spot." }, { status: 400 });
+    }
+    const brandName = String(body.brandName ?? "").trim();
+    const handle = normalizeHandle(String(body.handle ?? ""));
+    const website = String(body.website ?? "").trim();
+    const amount = Number(body.amount);
+    const status = (body.status ?? "confirmed") as BidStatus;
+
+    if (!brandName || !handle || !Number.isFinite(amount) || amount <= 0) {
+      return NextResponse.json(
+        { error: "brandName, handle, and amount are required." },
+        { status: 400 },
+      );
+    }
+    if (!["pending", "confirmed", "rejected"].includes(status)) {
+      return NextResponse.json({ error: "Invalid status." }, { status: 400 });
+    }
+
+    const now = new Date().toISOString();
+    const bid: Bid = {
+      id: newBidId(),
+      spotId,
+      brandName,
+      handle,
+      website,
+      amount,
+      deposit: calcDeposit(amount),
+      status,
+      createdAt: now,
+      updatedAt: now,
+      note: body.note ? String(body.note) : "Added manually in admin.",
+    };
+
+    const outcome = await withBidsLock(async (bids) => {
+      // If confirming a higher bid, mark lower confirmed as outbid
+      let next = [...bids, bid];
+      if (status === "confirmed") {
+        next = next.map((b) => {
+          if (
+            b.id !== bid.id &&
+            b.spotId === spotId &&
+            b.status === "confirmed" &&
+            b.amount < amount
+          ) {
+            return {
+              ...b,
+              status: "rejected" as const,
+              updatedAt: now,
+              note:
+                (b.note ? b.note + " | " : "") + "Outbid — refund deposit manually.",
+            };
+          }
+          return b;
+        });
+      }
+      return { result: bid, bids: next };
+    });
+
+    if ("error" in outcome) {
+      return NextResponse.json({ error: outcome.error }, { status: 400 });
+    }
+    return NextResponse.json({ ok: true, bid: outcome.result });
+  }
+
+  if (action === "leader") {
+    // Convenience: set current holder by confirming/updating highest for a spot
+    const spotId = Number(body.spotId);
+    const amount = Number(body.amount);
+    const brandName = String(body.brandName ?? "").trim();
+    const handle = normalizeHandle(String(body.handle ?? ""));
+    if (!getSpot(spotId) || !brandName || !handle || !Number.isFinite(amount)) {
+      return NextResponse.json({ error: "Missing fields." }, { status: 400 });
+    }
+
+    const now = new Date().toISOString();
+    const outcome = await withBidsLock(async (bids) => {
+      const existing = highestConfirmedForSpot(bids, spotId);
+      let next = [...bids];
+      if (existing) {
+        next = next.map((b) =>
+          b.id === existing.id
+            ? {
+                ...b,
+                brandName,
+                handle,
+                amount,
+                deposit: calcDeposit(amount),
+                website: String(body.website ?? b.website),
+                updatedAt: now,
+                note: (b.note ? b.note + " | " : "") + "Edited in admin.",
+              }
+            : b,
+        );
+        const updated = next.find((b) => b.id === existing.id)!;
+        return { result: updated, bids: next };
+      }
+      const bid: Bid = {
+        id: newBidId(),
+        spotId,
+        brandName,
+        handle,
+        website: String(body.website ?? ""),
+        amount,
+        deposit: calcDeposit(amount),
+        status: "confirmed",
+        createdAt: now,
+        updatedAt: now,
+        note: "Set as current holder in admin.",
+      };
+      return { result: bid, bids: [...next, bid] };
+    });
+
+    if ("error" in outcome) {
+      return NextResponse.json({ error: outcome.error }, { status: 400 });
+    }
+    return NextResponse.json({ ok: true, bid: outcome.result });
+  }
+
+  return NextResponse.json({ error: "Unknown action." }, { status: 400 });
+}
