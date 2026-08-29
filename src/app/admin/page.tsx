@@ -23,6 +23,7 @@ export default function AdminPage() {
     brandName: "",
     handle: "",
     website: "",
+    logoUrl: "",
     amount: "",
     status: "confirmed",
   });
@@ -179,6 +180,7 @@ export default function AdminPage() {
               brandName: manual.brandName,
               handle: manual.handle,
               website: manual.website,
+              logoUrl: manual.logoUrl,
               amount: Number(manual.amount),
               status: manual.status,
             });
@@ -210,9 +212,15 @@ export default function AdminPage() {
             className="focus-ring rounded-md border border-line bg-card px-3 py-2 text-cream"
           />
           <input
-            placeholder="https://"
+            placeholder="https:// website"
             value={manual.website}
             onChange={(e) => setManual({ ...manual, website: e.target.value })}
+            className="focus-ring rounded-md border border-line bg-card px-3 py-2 text-cream"
+          />
+          <input
+            placeholder="Logo URL"
+            value={manual.logoUrl}
+            onChange={(e) => setManual({ ...manual, logoUrl: e.target.value })}
             className="focus-ring rounded-md border border-line bg-card px-3 py-2 text-cream"
           />
           <input
@@ -295,6 +303,7 @@ function BidTable({
             <tr>
               <th className="px-3 py-2">Spot</th>
               <th className="px-3 py-2">Brand / handle</th>
+              <th className="px-3 py-2">Logo URL</th>
               <th className="px-3 py-2">Amount</th>
               <th className="px-3 py-2">Deposit</th>
               <th className="px-3 py-2">Status</th>
@@ -304,7 +313,7 @@ function BidTable({
           <tbody>
             {bids.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-3 py-4 text-dim">
+                <td colSpan={7} className="px-3 py-4 text-dim">
                   None
                 </td>
               </tr>
@@ -320,6 +329,28 @@ function BidTable({
                   )}
                   {bid.note && (
                     <div className="mt-1 text-xs text-dim">{bid.note}</div>
+                  )}
+                </td>
+                <td className="px-3 py-3">
+                  <input
+                    defaultValue={bid.logoUrl ?? ""}
+                    placeholder="https://…/logo.png"
+                    className="focus-ring w-40 rounded border border-line bg-bg px-2 py-1 text-xs text-cream"
+                    title="Paste logo URL"
+                    onBlur={(e) => {
+                      const logoUrl = e.target.value.trim();
+                      if (logoUrl !== (bid.logoUrl ?? "")) {
+                        onUpdate(bid.id, { logoUrl });
+                      }
+                    }}
+                  />
+                  {(bid.logoUrl ?? "").length > 0 && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={bid.logoUrl}
+                      alt=""
+                      className="mt-1 h-8 w-8 rounded object-contain bg-white/10"
+                    />
                   )}
                 </td>
                 <td className="px-3 py-3">

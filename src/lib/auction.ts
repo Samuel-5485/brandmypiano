@@ -69,6 +69,8 @@ export function buildPublicBoard(bids: Bid[]): PublicBoard {
       currentBid: top?.amount ?? null,
       holderHandle: top?.handle ?? null,
       holderBrand: top?.brandName ?? null,
+      holderWebsite: top?.website || null,
+      holderLogoUrl: top?.logoUrl?.trim() ? top.logoUrl.trim() : null,
       hasBid: Boolean(top),
       minNextBid: minNextBid(bids, spot.id),
     };

@@ -32,6 +32,7 @@ export async function GET(request: Request) {
       "brandName",
       "handle",
       "website",
+      "logoUrl",
       "amount",
       "deposit",
       "status",
@@ -48,6 +49,7 @@ export async function GET(request: Request) {
         bid.brandName,
         bid.handle,
         bid.website,
+        bid.logoUrl ?? "",
         bid.amount,
         bid.deposit,
         bid.status,
@@ -87,6 +89,7 @@ export async function POST(request: Request) {
     brandName?: string;
     handle?: string;
     website?: string;
+    logoUrl?: string;
     amount?: number;
     status?: BidStatus;
     note?: string;
@@ -151,6 +154,7 @@ export async function POST(request: Request) {
       if (body.brandName !== undefined) current.brandName = String(body.brandName).trim();
       if (body.handle !== undefined) current.handle = normalizeHandle(String(body.handle));
       if (body.website !== undefined) current.website = String(body.website).trim();
+      if (body.logoUrl !== undefined) current.logoUrl = String(body.logoUrl).trim();
       if (body.amount !== undefined) {
         const amount = Number(body.amount);
         if (!Number.isFinite(amount) || amount <= 0) return { error: "Invalid amount." };
@@ -187,6 +191,7 @@ export async function POST(request: Request) {
     const brandName = String(body.brandName ?? "").trim();
     const handle = normalizeHandle(String(body.handle ?? ""));
     const website = String(body.website ?? "").trim();
+    const logoUrl = String(body.logoUrl ?? "").trim();
     const amount = Number(body.amount);
     const status = (body.status ?? "confirmed") as BidStatus;
 
@@ -207,6 +212,7 @@ export async function POST(request: Request) {
       brandName,
       handle,
       website,
+      logoUrl,
       amount,
       deposit: calcDeposit(amount),
       status,
@@ -270,6 +276,10 @@ export async function POST(request: Request) {
                 amount,
                 deposit: calcDeposit(amount),
                 website: String(body.website ?? b.website),
+                logoUrl:
+                  body.logoUrl !== undefined
+                    ? String(body.logoUrl).trim()
+                    : (b.logoUrl ?? ""),
                 updatedAt: now,
                 note: (b.note ? b.note + " | " : "") + "Edited in admin.",
               }
@@ -284,6 +294,7 @@ export async function POST(request: Request) {
         brandName,
         handle,
         website: String(body.website ?? ""),
+        logoUrl: String(body.logoUrl ?? ""),
         amount,
         deposit: calcDeposit(amount),
         status: "confirmed",

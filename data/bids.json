@@ -22,8 +22,9 @@
       "deposit": 5,
       "status": "confirmed",
       "createdAt": "2026-08-29T18:08:58.366Z",
-      "updatedAt": "2026-08-29T18:08:58.366Z",
-      "note": "Added manually in admin."
+      "updatedAt": "2026-08-29T22:16:32.944Z",
+      "note": "Added manually in admin.",
+      "logoUrl": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR9-i-W-lQgMaWap4KzpzYTyTCyI8h4RhWe_cxh47BCAg&s=10"
     }
   ]
 }

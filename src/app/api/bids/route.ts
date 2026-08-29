@@ -31,6 +31,7 @@ export async function POST(request: Request) {
     brandName?: string;
     handle?: string;
     website?: string;
+    logoUrl?: string;
     amount?: number;
   };
 
@@ -49,6 +50,7 @@ export async function POST(request: Request) {
   const brandName = String(body.brandName ?? "").trim();
   const handle = normalizeHandle(String(body.handle ?? ""));
   const website = String(body.website ?? "").trim();
+  const logoUrl = String(body.logoUrl ?? "").trim();
   const amount = Number(body.amount);
 
   if (brandName.length < 2) {
@@ -69,6 +71,18 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
+  if (logoUrl) {
+    const ok =
+      logoUrl.startsWith("/logos/") ||
+      logoUrl.startsWith("data:image/") ||
+      /^https?:\/\//i.test(logoUrl);
+    if (!ok) {
+      return NextResponse.json(
+        { error: "Logo must be an http(s) URL or an uploaded /logos/ path." },
+        { status: 400 },
+      );
+    }
+  }
 
   const outcome = await withBidsLock(async (bids) => {
     const err = validateNewBidAmount(bids, spotId, amount);
@@ -81,6 +95,7 @@ export async function POST(request: Request) {
       brandName,
       handle,
       website,
+      logoUrl,
       amount,
       deposit: calcDeposit(amount),
       status: "pending",

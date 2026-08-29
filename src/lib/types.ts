@@ -6,6 +6,8 @@ export type Bid = {
   brandName: string;
   handle: string;
   website: string;
+  /** Public URL or /logos/... path. Empty/missing = letter avatar until admin pastes a logo. */
+  logoUrl?: string;
   amount: number;
   deposit: number;
   status: BidStatus;
@@ -26,6 +28,8 @@ export type SpotPublicState = {
   currentBid: number | null;
   holderHandle: string | null;
   holderBrand: string | null;
+  holderWebsite: string | null;
+  holderLogoUrl: string | null;
   hasBid: boolean;
   minNextBid: number;
 };

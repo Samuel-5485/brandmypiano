@@ -7,6 +7,7 @@ import type { PublicBoard, SpotPublicState } from "@/lib/types";
 import { BidModal } from "@/components/BidModal";
 import { Countdown } from "@/components/Countdown";
 import { PianoGraphic } from "@/components/PianoGraphic";
+import { StickerMockup } from "@/components/StickerMockup";
 import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 
 type Props = {
@@ -223,18 +224,9 @@ export function AuctionApp({ initialBoard }: Props) {
             <h3 className="font-display text-2xl text-cream sm:text-3xl">
               How the sticker sits
             </h3>
-            <div className="piano-stage mt-5 overflow-hidden rounded-xl">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src="/piano-sticker.jpg"
-                alt="Die-cut vinyl stickers placed on the music rest and just above the keys"
-                className="h-auto w-full"
-              />
+            <div className="mt-5">
+              <StickerMockup spots={board.spots} />
             </div>
-            <p className="mt-3 max-w-2xl text-sm leading-relaxed text-dim sm:text-base">
-              Die-cut vinyl on the music rest and just above the keys. 12 months
-              on the real instrument.
-            </p>
           </div>
         </section>
 

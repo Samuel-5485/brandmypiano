@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { BrandLogo } from "@/components/BrandLogo";
 import { money } from "@/lib/auction";
 import type { SpotPublicState } from "@/lib/types";
 
@@ -103,12 +104,13 @@ export function PianoGraphic({ activeId, spots, onSelect }: Props) {
                 spot.tip === "above"
                   ? "bottom-full mb-1.5"
                   : "top-full mt-1.5";
+              const hasWinner = Boolean(state?.hasBid && state.holderBrand);
 
               return (
                 <button
                   key={spot.id}
                   type="button"
-                  className={`group absolute z-10 rounded-md border transition focus-ring ${
+                  className={`group absolute z-10 overflow-hidden rounded-md border transition focus-ring ${
                     active
                       ? "border-[var(--gold-2)] bg-[color-mix(in_srgb,var(--gold)_28%,transparent)]"
                       : "border-gold bg-[color-mix(in_srgb,var(--gold)_10%,transparent)] hover:border-[var(--gold-2)] hover:bg-[color-mix(in_srgb,var(--gold)_22%,transparent)]"
@@ -122,8 +124,18 @@ export function PianoGraphic({ activeId, spots, onSelect }: Props) {
                   aria-label={`Spot ${spot.id}: ${name}. Current bid ${bidLabel}`}
                   onClick={() => onSelect(spot.id)}
                 >
+                  {hasWinner && state?.holderBrand ? (
+                    <span className="absolute inset-0 flex items-center justify-center p-0.5 sm:p-1">
+                      <BrandLogo
+                        brandName={state.holderBrand}
+                        logoUrl={state.holderLogoUrl}
+                        className="h-full w-full rounded-sm"
+                        mediaClassName="object-contain text-[9px] sm:text-[11px]"
+                      />
+                    </span>
+                  ) : null}
                   <span
-                    className={`absolute left-1 top-1 flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold ${
+                    className={`absolute left-0.5 top-0.5 z-10 flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold sm:left-1 sm:top-1 sm:h-6 sm:w-6 sm:text-[11px] ${
                       active
                         ? "bg-[var(--gold-2)] text-[var(--button-text)]"
                         : "bg-gold text-[var(--button-text)]"
@@ -135,6 +147,11 @@ export function PianoGraphic({ activeId, spots, onSelect }: Props) {
                     className={`pointer-events-none absolute left-1/2 z-20 hidden w-max max-w-[12rem] -translate-x-1/2 rounded-md border border-line bg-[var(--bg-card)] px-2.5 py-1.5 text-left text-xs text-cream shadow-lg group-hover:block group-focus-visible:block ${tipPos}`}
                   >
                     <span className="block font-medium">{name}</span>
+                    {state?.holderBrand && (
+                      <span className="mt-0.5 block text-dim">
+                        {state.holderBrand}
+                      </span>
+                    )}
                     <span className="mt-0.5 block text-dim">{bidLabel}</span>
                   </span>
                 </button>

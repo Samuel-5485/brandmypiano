@@ -26,6 +26,8 @@ export function BidModal({
   const [brandName, setBrandName] = useState("");
   const [handle, setHandle] = useState("");
   const [website, setWebsite] = useState("");
+  const [logoUrl, setLogoUrl] = useState("");
+  const [logoFileName, setLogoFileName] = useState("");
   const [amount, setAmount] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -41,6 +43,8 @@ export function BidModal({
     setBrandName("");
     setHandle("");
     setWebsite("");
+    setLogoUrl("");
+    setLogoFileName("");
     setAmount(String(spot.minNextBid));
     setError("");
     setDone(null);
@@ -63,6 +67,34 @@ export function BidModal({
     ? calcDeposit(parsedAmount)
     : 0;
 
+  async function uploadLogo(file: File): Promise<string> {
+    const body = new FormData();
+    body.append("file", file);
+    const res = await fetch("/api/logos", { method: "POST", body });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Logo upload failed.");
+    return String(data.url);
+  }
+
+  async function onLogoFile(file: File | null) {
+    if (!file) {
+      setLogoFileName("");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      const url = await uploadLogo(file);
+      setLogoUrl(url);
+      setLogoFileName(file.name);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Logo upload failed.");
+      setLogoFileName("");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function submit(e: FormEvent) {
     e.preventDefault();
     if (ended) {
@@ -80,6 +112,7 @@ export function BidModal({
           brandName,
           handle,
           website,
+          logoUrl: logoUrl.trim(),
           amount: Number(amount),
         }),
       });
@@ -227,6 +260,38 @@ export function BidModal({
                 placeholder="https://"
                 disabled={ended || busy}
               />
+            </label>
+            <label className="block text-sm">
+              <span className="mb-1.5 block text-dim">Logo URL (optional)</span>
+              <input
+                value={logoUrl}
+                onChange={(e) => {
+                  setLogoUrl(e.target.value);
+                  setLogoFileName("");
+                }}
+                className="focus-ring w-full rounded-md border border-line bg-bg px-3 py-3 text-cream"
+                placeholder="https://…/logo.png"
+                disabled={ended || busy}
+              />
+            </label>
+            <label className="block text-sm">
+              <span className="mb-1.5 block text-dim">Or upload a logo (optional)</span>
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
+                className="focus-ring block w-full text-sm text-dim file:mr-3 file:rounded-md file:border-0 file:bg-gold file:px-3 file:py-2 file:text-sm file:font-medium file:text-[var(--button-text)]"
+                disabled={ended || busy}
+                onChange={(e) => onLogoFile(e.target.files?.[0] ?? null)}
+              />
+              {logoFileName && (
+                <span className="mt-1.5 block text-xs text-dim">
+                  Uploaded: {logoFileName}
+                </span>
+              )}
+              <span className="mt-1.5 block text-xs text-dim">
+                No logo yet? A letter avatar shows until I paste your logo in
+                admin.
+              </span>
             </label>
             <label className="block text-sm">
               <span className="mb-1.5 block text-dim">Bid amount (USD)</span>
