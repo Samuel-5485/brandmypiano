@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { AdminLogoField } from "@/components/AdminLogoField";
 import { CONFIG } from "@/config";
 import { money } from "@/lib/auction";
 import type { Bid, PublicBoard } from "@/lib/types";
@@ -332,26 +333,13 @@ function BidTable({
                   )}
                 </td>
                 <td className="px-3 py-3">
-                  <input
-                    defaultValue={bid.logoUrl ?? ""}
-                    placeholder="https://…/logo.png"
-                    className="focus-ring w-40 rounded border border-line bg-bg px-2 py-1 text-xs text-cream"
-                    title="Paste logo URL"
-                    onBlur={(e) => {
-                      const logoUrl = e.target.value.trim();
-                      if (logoUrl !== (bid.logoUrl ?? "")) {
-                        onUpdate(bid.id, { logoUrl });
-                      }
-                    }}
+                  <AdminLogoField
+                    key={`${bid.id}-${bid.logoUrl ?? ""}`}
+                    spotId={bid.spotId}
+                    brandName={bid.brandName}
+                    initialUrl={bid.logoUrl ?? ""}
+                    onCommit={(logoUrl) => onUpdate(bid.id, { logoUrl })}
                   />
-                  {(bid.logoUrl ?? "").length > 0 && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={bid.logoUrl}
-                      alt=""
-                      className="mt-1 h-8 w-8 rounded object-contain bg-white/10"
-                    />
-                  )}
                 </td>
                 <td className="px-3 py-3">
                   <input

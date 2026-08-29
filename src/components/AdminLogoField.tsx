@@ -1,0 +1,65 @@
+"use client";
+
+import { useState } from "react";
+import { BrandLogo } from "@/components/BrandLogo";
+import { STICKER_PLATE_ASPECT } from "@/components/StickerMockup";
+
+type Props = {
+  spotId: number;
+  brandName: string;
+  initialUrl: string;
+  onCommit: (logoUrl: string) => void;
+};
+
+export function AdminLogoField({
+  spotId,
+  brandName,
+  initialUrl,
+  onCommit,
+}: Props) {
+  const [draft, setDraft] = useState(initialUrl);
+  const plate =
+    spotId === 1
+      ? STICKER_PLATE_ASPECT[1]
+      : spotId === 2
+        ? STICKER_PLATE_ASPECT[2]
+        : { width: 120, height: 72 };
+
+  return (
+    <div className="space-y-2">
+      <input
+        value={draft}
+        placeholder="https://…/logo.png (prefer transparent PNG)"
+        className="focus-ring w-44 rounded border border-line bg-bg px-2 py-1 text-xs text-cream"
+        title="Paste logo URL — preview updates live; blur to save"
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => {
+          const logoUrl = draft.trim();
+          if (logoUrl !== initialUrl.trim()) onCommit(logoUrl);
+        }}
+      />
+      <div
+        className="flex items-center justify-center rounded-sm bg-[#f3ece1] p-[7%]"
+        style={{ width: plate.width, height: plate.height }}
+        title={
+          spotId === 1 || spotId === 2
+            ? `Plate preview for spot ${spotId}`
+            : "Logo preview"
+        }
+      >
+        {draft.trim() || brandName ? (
+          <BrandLogo
+            brandName={brandName || "Brand"}
+            logoUrl={draft.trim() || null}
+            knockoutWhite
+            className="h-full w-full"
+            mediaClassName="text-xs"
+          />
+        ) : (
+          <span className="text-[10px] text-[#6f675d]">Empty plate</span>
+        )}
+      </div>
+      <p className="text-[10px] text-dim">Prefer transparent PNG</p>
+    </div>
+  );
+}

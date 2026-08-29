@@ -110,10 +110,10 @@ export function PianoGraphic({ activeId, spots, onSelect }: Props) {
                 <button
                   key={spot.id}
                   type="button"
-                  className={`group absolute z-10 overflow-hidden rounded-md border transition focus-ring ${
+                  className={`group absolute z-10 overflow-hidden rounded-md border bg-transparent transition focus-ring ${
                     active
-                      ? "border-[var(--gold-2)] bg-[color-mix(in_srgb,var(--gold)_28%,transparent)]"
-                      : "border-gold bg-[color-mix(in_srgb,var(--gold)_10%,transparent)] hover:border-[var(--gold-2)] hover:bg-[color-mix(in_srgb,var(--gold)_22%,transparent)]"
+                      ? "border-[var(--gold-2)]"
+                      : "border-gold hover:border-[var(--gold-2)]"
                   }`}
                   style={{
                     left: spot.left,
@@ -125,24 +125,16 @@ export function PianoGraphic({ activeId, spots, onSelect }: Props) {
                   onClick={() => onSelect(spot.id)}
                 >
                   {hasWinner && state?.holderBrand ? (
-                    <span className="absolute inset-0 flex items-center justify-center p-0.5 sm:p-1">
+                    <span className="absolute inset-0 flex items-center justify-center bg-transparent p-[8%]">
                       <BrandLogo
                         brandName={state.holderBrand}
                         logoUrl={state.holderLogoUrl}
-                        className="h-full w-full rounded-sm"
+                        knockoutWhite
+                        className="h-full w-full"
                         mediaClassName="object-contain text-[9px] sm:text-[11px]"
                       />
                     </span>
                   ) : null}
-                  <span
-                    className={`absolute left-0.5 top-0.5 z-10 flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold sm:left-1 sm:top-1 sm:h-6 sm:w-6 sm:text-[11px] ${
-                      active
-                        ? "bg-[var(--gold-2)] text-[var(--button-text)]"
-                        : "bg-gold text-[var(--button-text)]"
-                    }`}
-                  >
-                    {spot.id}
-                  </span>
                   <span
                     className={`pointer-events-none absolute left-1/2 z-20 hidden w-max max-w-[12rem] -translate-x-1/2 rounded-md border border-line bg-[var(--bg-card)] px-2.5 py-1.5 text-left text-xs text-cream shadow-lg group-hover:block group-focus-visible:block ${tipPos}`}
                   >
