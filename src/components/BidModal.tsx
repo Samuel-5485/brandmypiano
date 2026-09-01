@@ -2,12 +2,7 @@
 
 import { useEffect, useId, useState, type FormEvent } from "react";
 import { CONFIG } from "@/config";
-import {
-  calcDeposit,
-  lockPaymentUrl,
-  money,
-  normalizeHandle,
-} from "@/lib/auction";
+import { lockPaymentUrl, money, normalizeHandle } from "@/lib/auction";
 import type { SpotPublicState } from "@/lib/types";
 
 const HANDLE_KEY = "brandmypiano-handle";
@@ -39,7 +34,6 @@ export function BidModal({
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState<{
-    deposit: number;
     amount: number;
     spotId: number;
     brandName: string;
@@ -74,23 +68,20 @@ export function BidModal({
 
   if (!open || !spot) return null;
 
-  const parsedAmount = Number(amount);
-  const depositPreview = Number.isFinite(parsedAmount)
-    ? calcDeposit(parsedAmount)
-    : 0;
   const normalizedHandle = normalizeHandle(handle);
   const isCurrentLeader =
     Boolean(spot.holderHandle) &&
     normalizedHandle.length > 1 &&
     spot.holderHandle === normalizedHandle &&
     !spot.locked;
-  const leaderDeposit = spot.currentBid ? calcDeposit(spot.currentBid) : depositPreview;
-  const payUrl = isCurrentLeader
-    ? lockPaymentUrl(paymentLink, leaderDeposit)
-    : "";
+  const leaderBid = spot.currentBid ?? 0;
+  const payUrl =
+    isCurrentLeader && leaderBid > 0
+      ? lockPaymentUrl(paymentLink, leaderBid)
+      : "";
   const donePayUrl =
-    done?.isLeader && paymentLink
-      ? lockPaymentUrl(paymentLink, done.deposit)
+    done?.isLeader && paymentLink && done.amount > 0
+      ? lockPaymentUrl(paymentLink, done.amount)
       : "";
 
   async function uploadLogo(file: File): Promise<string> {
@@ -161,7 +152,6 @@ export function BidModal({
           (s: SpotPublicState) => s.spotId === data.bid.spotId,
         );
       setDone({
-        deposit: data.bid.deposit,
         amount: data.bid.amount,
         spotId: data.bid.spotId,
         brandName: data.bid.brandName,
@@ -216,7 +206,7 @@ export function BidModal({
 
         {isCurrentLeader && !done && payUrl && (
           <div className="mb-4 rounded-md border border-gold/40 bg-gold/5 px-3 py-3 text-sm">
-            <p className="text-cream">You are leading this spot.</p>
+            <p className="text-cream">You are the highest bid on this spot.</p>
             <a
               href={payUrl}
               target="_blank"
@@ -226,9 +216,9 @@ export function BidModal({
             >
               Pay to lock this spot
             </a>
-            <p className="mt-2 text-xs text-dim">
-              Payment does not happen automatically when you bid. Lock after you
-              pay the deposit.
+            <p className="mt-2 text-xs leading-relaxed text-dim">
+              You are the highest bid on this spot. Paying through Polar locks it
+              for 12 months. No refund after a confirmed payment.
             </p>
           </div>
         )}
@@ -247,18 +237,24 @@ export function BidModal({
                   separate races.
                 </p>
                 {donePayUrl ? (
-                  <a
-                    href={donePayUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="focus-ring inline-block w-full rounded-md px-4 py-3 text-center font-medium transition hover:opacity-90"
-                    style={{
-                      background: "var(--button-bg)",
-                      color: "var(--button-text)",
-                    }}
-                  >
-                    Pay to lock this spot
-                  </a>
+                  <>
+                    <a
+                      href={donePayUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="focus-ring inline-block w-full rounded-md px-4 py-3 text-center font-medium transition hover:opacity-90"
+                      style={{
+                        background: "var(--button-bg)",
+                        color: "var(--button-text)",
+                      }}
+                    >
+                      Pay to lock this spot
+                    </a>
+                    <p className="text-xs">
+                      You are the highest bid on this spot. Paying through Polar
+                      locks it for 12 months. No refund after a confirmed payment.
+                    </p>
+                  </>
                 ) : (
                   <p>
                     DM{" "}
@@ -296,6 +292,10 @@ export function BidModal({
                 Bidding is closed.
               </p>
             )}
+            <p className="rounded-md border border-line bg-bg/40 px-3 py-2.5 text-sm leading-relaxed text-dim">
+              This bid is public and not a charge. You pay only if you are the
+              leader and you click Pay to lock.
+            </p>
             <label className="block text-sm">
               <span className="mb-1.5 block text-dim">Brand name</span>
               <input
@@ -371,9 +371,7 @@ export function BidModal({
             </label>
             <p className="text-sm text-dim">
               Bids show on the live board immediately for this spot only. Minimum
-              raise ${CONFIG.minRaise}. Deposit to lock:{" "}
-              <span className="text-cream">{money(depositPreview)}</span> (20%,
-              min $5).
+              raise ${CONFIG.minRaise}.
             </p>
             {error && (
               <p className="rounded-md border border-red-900/50 bg-red-950/30 px-3 py-2 text-sm text-red-200">
@@ -386,7 +384,7 @@ export function BidModal({
               className="focus-ring w-full rounded-md px-4 py-3.5 font-medium transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
               style={{ background: "var(--button-bg)", color: "var(--button-text)" }}
             >
-              {busy ? "Saving…" : spot.hasBid ? "Place outbid" : "Place bid"}
+              {busy ? "Saving…" : spot.hasBid ? "Outbid" : "Bid"}
             </button>
           </form>
         )}

@@ -17,15 +17,15 @@ export function calcDeposit(amount: number): number {
   );
 }
 
-export function lockPaymentUrl(paymentLink: string, deposit: number): string {
+export function lockPaymentUrl(paymentLink: string, bidAmountUsd: number): string {
   if (!paymentLink.trim()) return "";
   try {
     const url = new URL(paymentLink);
-    url.searchParams.set("amount", String(Math.round(deposit * 100)));
+    url.searchParams.set("amount", String(Math.round(bidAmountUsd * 100)));
     return url.toString();
   } catch {
     const sep = paymentLink.includes("?") ? "&" : "?";
-    return `${paymentLink}${sep}amount=${Math.round(deposit * 100)}`;
+    return `${paymentLink}${sep}amount=${Math.round(bidAmountUsd * 100)}`;
   }
 }
 

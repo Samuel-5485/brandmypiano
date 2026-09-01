@@ -266,7 +266,11 @@ export function AuctionApp({ initialBoard }: Props) {
 }
 
 function FaqSection() {
-  const items = [
+  const items: {
+    q: string;
+    a?: string;
+    bullets?: string[];
+  }[] = [
     {
       q: "Is this real?",
       a: `Yes. I am ${CONFIG.name} (${CONFIG.handle}). I do not own the keyboard yet. Eleven separate spot auctions fund the PSR-E383 kit.`,
@@ -276,8 +280,16 @@ function FaqSection() {
       a: "No. Spot 1 and spot 2 are different auctions. Five people can bid on spot 1; only the highest of those five goes on the music rest.",
     },
     {
-      q: "How do I pay?",
-      a: `Bid on the live board — it shows immediately on that spot only. If you are the current leader, use Pay to lock (Polar deposit link when set). I confirm in admin to lock the spot. DM ${CONFIG.handle} if you need help.`,
+      q: "Payment",
+      bullets: [
+        "Pay only as leader — use Pay to lock while you are highest, or at end of auction if you still lead.",
+        "Polar amount is that spot's bid in cents (?amount= on the checkout link).",
+        "Polar is a one-time checkout, not a subscription.",
+        "Outbid before you pay = $0 charged.",
+        "Once I confirm payment and lock the spot, there is no refund.",
+        "I can reject a logo and ask for a new file before we print.",
+        "After Polar, the /success page explains that I confirm in admin before the spot locks.",
+      ],
     },
     {
       q: "Do I get guaranteed views or a church mention?",
@@ -285,7 +297,7 @@ function FaqSection() {
     },
     {
       q: "How long does the sticker stay?",
-      a: "12 months from proof photos after the piano arrives and stickers are applied.",
+      a: "12 months from proof photos after the keyboard arrives and stickers are applied.",
     },
     {
       q: "Are you affiliated with Yamaha?",
@@ -293,11 +305,11 @@ function FaqSection() {
     },
     {
       q: "What if I get outbid?",
-      a: "I refund your deposit by hand in v1. Say so clearly in your DM if you need a refund.",
+      a: "If you never paid, nothing was charged. If you paid and the spot is not locked yet, DM me — locked spots are final.",
     },
     {
       q: "Who approves the logo?",
-      a: "I do, by hand. I can refuse a logo.",
+      a: "I do, by hand. I can reject a logo and ask for a new file.",
     },
   ];
 
@@ -313,7 +325,15 @@ function FaqSection() {
                 <span className="text-gold transition group-open:rotate-45">+</span>
               </span>
             </summary>
-            <p className="pb-4 text-sm leading-relaxed text-dim">{item.a}</p>
+            {item.bullets ? (
+              <ul className="list-disc space-y-2 pb-4 pl-5 text-sm leading-relaxed text-dim">
+                {item.bullets.map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
+              </ul>
+            ) : (
+              <p className="pb-4 text-sm leading-relaxed text-dim">{item.a}</p>
+            )}
           </details>
         ))}
       </div>
