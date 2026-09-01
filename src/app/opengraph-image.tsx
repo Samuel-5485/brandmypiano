@@ -33,11 +33,19 @@ export default function OpenGraphImage() {
           brand my piano
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-          <div style={{ fontSize: 72, lineHeight: 1.05, maxWidth: 900 }}>
+          <div
+            style={{
+              display: "flex",
+              fontSize: 72,
+              lineHeight: 1.05,
+              maxWidth: 900,
+            }}
+          >
             {CONFIG.headline}
           </div>
           <div
             style={{
+              display: "flex",
               fontSize: 28,
               color: "#cbbfae",
               maxWidth: 820,
@@ -45,7 +53,7 @@ export default function OpenGraphImage() {
               fontFamily: "sans-serif",
             }}
           >
-            {CONFIG.spots.length} sticker spots. Live auction. The money buys a PSR-E383 kit.
+            {`${CONFIG.spots.length} sticker spots. Live auction. The money buys a PSR-E383 kit.`}
           </div>
         </div>
         <div
@@ -57,8 +65,8 @@ export default function OpenGraphImage() {
             fontFamily: "sans-serif",
           }}
         >
-          <span>{CONFIG.handle}</span>
-          <span>Goal ${CONFIG.goal}</span>
+          <span style={{ display: "flex" }}>{CONFIG.handle}</span>
+          <span style={{ display: "flex" }}>{`Goal $${CONFIG.goal}`}</span>
         </div>
       </div>
     ),
