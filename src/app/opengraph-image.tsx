@@ -45,7 +45,7 @@ export default function OpenGraphImage() {
               fontFamily: "sans-serif",
             }}
           >
-            Ten sticker spots. Live auction. The money buys an 88-key Yamaha.
+            {CONFIG.spots.length} sticker spots. Live auction. The money buys a PSR-E383 kit.
           </div>
         </div>
         <div

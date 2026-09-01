@@ -7,15 +7,17 @@ import {
   normalizeHandle,
   validateNewBidAmount,
 } from "@/lib/auction";
-import { newBidId, readBids, withBidsLock } from "@/lib/store";
+import { newBidId, readAuctionFile, withAuctionLock } from "@/lib/store";
 import type { Bid } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function GET() {
-  const bids = await readBids();
-  return NextResponse.json(buildPublicBoard(bids));
+  const file = await readAuctionFile();
+  return NextResponse.json(
+    buildPublicBoard(file.bids, file.lockedSpotIds ?? []),
+  );
 }
 
 export async function POST(request: Request) {
@@ -84,8 +86,9 @@ export async function POST(request: Request) {
     }
   }
 
-  const outcome = await withBidsLock(async (bids) => {
-    const err = validateNewBidAmount(bids, spotId, amount);
+  const outcome = await withAuctionLock(async (file) => {
+    const locked = file.lockedSpotIds ?? [];
+    const err = validateNewBidAmount(file.bids, spotId, amount, locked);
     if (err) return { error: err };
 
     const now = new Date().toISOString();
@@ -102,17 +105,24 @@ export async function POST(request: Request) {
       createdAt: now,
       updatedAt: now,
     };
-    return { result: bid, bids: [...bids, bid] };
+    return {
+      result: bid,
+      file: { ...file, bids: [...file.bids, bid] },
+    };
   });
 
   if ("error" in outcome) {
     return NextResponse.json({ error: outcome.error }, { status: 400 });
   }
 
+  const file = await readAuctionFile();
+  const board = buildPublicBoard(file.bids, file.lockedSpotIds ?? []);
+
   return NextResponse.json({
     ok: true,
     bid: outcome.result,
+    board,
     message:
-      "Bid saved as pending. Pay the deposit, then DM me on X with the spot number, brand, and amount.",
+      "Bid is live on the board. Pay to lock only if you are the current leader on this spot.",
   });
 }

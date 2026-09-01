@@ -7,6 +7,7 @@ import type { PublicBoard, SpotPublicState } from "@/lib/types";
 import { BidModal } from "@/components/BidModal";
 import { Countdown } from "@/components/Countdown";
 import { PianoGraphic } from "@/components/PianoGraphic";
+import { LiveAuctionBoard } from "@/components/LiveAuctionBoard";
 import { StickerMockup } from "@/components/StickerMockup";
 import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 
@@ -83,7 +84,7 @@ export function AuctionApp({ initialBoard }: Props) {
             {[
               { label: "Raised", value: money(board.raised) },
               { label: "Goal", value: money(board.goal) },
-              { label: "Spots with a bid", value: `${board.spotsWithBid}/10` },
+              { label: "Spots with a bid", value: `${board.spotsWithBid}/${CONFIG.spots.length}` },
               { label: "Funded", value: `${board.percent}%` },
             ].map((stat) => (
               <div key={stat.label} className="card-surface rounded-xl p-4">
@@ -129,66 +130,11 @@ export function AuctionApp({ initialBoard }: Props) {
           />
         </section>
 
-        <section id="spots" className="mx-auto max-w-5xl px-4 py-12 sm:px-6">
-          <h2 className="font-display text-3xl text-cream sm:text-4xl">
-            Live auction
-          </h2>
-          <p className="mt-2 max-w-2xl text-dim">
-            Highest confirmed bid when the clock hits zero wins that spot for 12
-            months. Pending bids stay invisible until I confirm the deposit.
-          </p>
-          <div className="mt-8 grid gap-3 sm:grid-cols-2">
-            {board.spots.map((spot) => (
-              <article
-                key={spot.spotId}
-                className={`card-surface rounded-xl p-4 transition ${
-                  activeId === spot.spotId ? "ring-1 ring-gold" : ""
-                }`}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.16em] text-gold">
-                      Spot {spot.spotId}
-                    </p>
-                    <h3 className="mt-1 font-display text-xl text-cream">
-                      {spot.name}
-                    </h3>
-                    <p className="mt-1 text-sm text-dim">{spot.size}</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => openSpot(spot.spotId)}
-                    disabled={board.ended}
-                    className="focus-ring shrink-0 rounded-md px-3 py-2.5 text-sm font-medium transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-                    style={{ background: "var(--button-bg)", color: "var(--button-text)" }}
-                  >
-                    Bid
-                  </button>
-                </div>
-                <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                  <div>
-                    <dt className="text-dim">Starting</dt>
-                    <dd className="text-cream">{money(spot.startingBid)}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-dim">Current</dt>
-                    <dd className="text-cream">
-                      {spot.currentBid != null ? money(spot.currentBid) : "—"}
-                    </dd>
-                  </div>
-                  <div className="col-span-2">
-                    <dt className="text-dim">Holder</dt>
-                    <dd className="text-cream">
-                      {spot.holderBrand
-                        ? `${spot.holderBrand} (${spot.holderHandle})`
-                        : "Open"}
-                    </dd>
-                  </div>
-                </dl>
-              </article>
-            ))}
-          </div>
-        </section>
+        <LiveAuctionBoard
+          board={board}
+          activeId={activeId}
+          onBidSpot={openSpot}
+        />
 
         <section className="mx-auto max-w-5xl px-4 py-12 sm:px-6">
           <h2 className="font-display text-3xl text-cream">How it works</h2>
@@ -197,12 +143,12 @@ export function AuctionApp({ initialBoard }: Props) {
               {
                 n: "1",
                 t: "Pick a spot and bid",
-                d: "Choose one of ten vinyl places on the piano, case, stand, or bag.",
+                d: "Choose one of eleven vinyl places on the keyboard, stand, bench, bag, pedal, or headphones.",
               },
               {
                 n: "2",
-                t: "The auction buys the piano",
-                d: "Deposits and winning bids fund an 88-key Yamaha and the kit around it.",
+                t: "The auction buys the kit",
+                d: "Deposits and winning bids fund the Yamaha PSR-E383 — 61 portable keys plus stand, bench, bag, and pedal.",
               },
               {
                 n: "3",
@@ -278,8 +224,8 @@ export function AuctionApp({ initialBoard }: Props) {
           </p>
           <p className="mt-4 max-w-2xl text-sm leading-relaxed text-dim">
             If the goal is missed: the auction still settles, winners still get
-            stickers, and the money still buys the best 88-key piano I can get.
-            If the goal is passed: extra goes to strings, a cable kit, or
+            stickers, and the money still buys the best PSR-E383 kit I can get.
+            If the goal is passed: extra goes to a better bench, cables, or
             lessons. Not affiliated with Yamaha.
           </p>
         </section>
@@ -323,15 +269,15 @@ function FaqSection() {
   const items = [
     {
       q: "Is this real?",
-      a: `Yes. I am ${CONFIG.name} (${CONFIG.handle}). I do not own the piano yet. Confirmed bids and this auction are how I buy it. Pending bids stay off the public board until I confirm your deposit.`,
+      a: `Yes. I am ${CONFIG.name} (${CONFIG.handle}). I do not own the keyboard yet. Eleven separate spot auctions fund the PSR-E383 kit.`,
     },
     {
-      q: "What if the goal is missed?",
-      a: "The auction still settles. Winners still get stickers. The money still buys the best 88-key piano I can get.",
+      q: "Do spot 1 and spot 2 compete?",
+      a: "No. Spot 1 and spot 2 are different auctions. Five people can bid on spot 1; only the highest of those five goes on the music rest.",
     },
     {
       q: "How do I pay?",
-      a: `Place a bid, then pay the 20% deposit (minimum $5) via the payment link when shown, and DM ${CONFIG.handle} with spot number, brand, and amount. If a Polar link is not set yet, DM me and I will send payment details. Launch is not blocked on Polar.`,
+      a: `Bid on the live board — it shows immediately on that spot only. If you are the current leader, use Pay to lock (Polar deposit link when set). I confirm in admin to lock the spot. DM ${CONFIG.handle} if you need help.`,
     },
     {
       q: "Do I get guaranteed views or a church mention?",

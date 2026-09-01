@@ -146,7 +146,7 @@ export default function AdminPage() {
           {data && (
             <p className="mt-2 text-sm text-dim">
               Raised {money(data.board.raised)} / {money(data.board.goal)} ·{" "}
-              {data.board.spotsWithBid}/10 spots
+              {data.board.spotsWithBid}/{CONFIG.spots.length} spots
             </p>
           )}
         </div>
@@ -334,11 +334,12 @@ function BidTable({
                 </td>
                 <td className="px-3 py-3">
                   <AdminLogoField
-                    key={`${bid.id}-${bid.logoUrl ?? ""}`}
+                    key={`${bid.id}-${bid.logoUrl ?? ""}-${bid.keepBackground ? "1" : "0"}`}
                     spotId={bid.spotId}
                     brandName={bid.brandName}
                     initialUrl={bid.logoUrl ?? ""}
-                    onCommit={(logoUrl) => onUpdate(bid.id, { logoUrl })}
+                    initialKeepBackground={Boolean(bid.keepBackground)}
+                    onCommit={(patch) => onUpdate(bid.id, patch)}
                   />
                 </td>
                 <td className="px-3 py-3">

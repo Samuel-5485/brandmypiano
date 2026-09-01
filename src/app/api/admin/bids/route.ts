@@ -7,7 +7,7 @@ import {
   normalizeHandle,
 } from "@/lib/auction";
 import { isAdminAuthenticated } from "@/lib/auth";
-import { newBidId, readBids, withBidsLock } from "@/lib/store";
+import { newBidId, readAuctionFile, withAuctionLock } from "@/lib/store";
 import type { Bid, BidStatus } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -24,7 +24,7 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url);
   if (searchParams.get("format") === "csv") {
-    const bids = await readBids();
+    const bids = await readAuctionFile();
     const header = [
       "id",
       "spotId",
@@ -40,7 +40,7 @@ export async function GET(request: Request) {
       "updatedAt",
       "note",
     ];
-    const rows = bids.map((bid) => {
+    const rows = bids.bids.map((bid) => {
       const spot = getSpot(bid.spotId);
       return [
         bid.id,
@@ -69,11 +69,12 @@ export async function GET(request: Request) {
     });
   }
 
-  const bids = await readBids();
+  const file = await readAuctionFile();
   return NextResponse.json({
-    bids,
-    board: buildPublicBoard(bids),
+    bids: file.bids,
+    board: buildPublicBoard(file.bids, file.lockedSpotIds ?? []),
     adminNote: CONFIG.adminNote,
+    lockedSpotIds: file.lockedSpotIds ?? [],
   });
 }
 
@@ -90,6 +91,7 @@ export async function POST(request: Request) {
     handle?: string;
     website?: string;
     logoUrl?: string;
+    keepBackground?: boolean;
     amount?: number;
     status?: BidStatus;
     note?: string;
@@ -105,37 +107,44 @@ export async function POST(request: Request) {
 
   if (action === "confirm" || action === "reject") {
     const id = String(body.id ?? "");
-    const outcome = await withBidsLock(async (bids) => {
-      const idx = bids.findIndex((b) => b.id === id);
+    const outcome = await withAuctionLock(async (file) => {
+      const idx = file.bids.findIndex((b) => b.id === id);
       if (idx < 0) return { error: "Bid not found." };
-      const next = [...bids];
-      const target = { ...next[idx] };
+      const nextBids = [...file.bids];
+      const target = { ...nextBids[idx] };
       target.status = action === "confirm" ? "confirmed" : "rejected";
       target.updatedAt = new Date().toISOString();
-      next[idx] = target;
+      nextBids[idx] = target;
 
-      // When confirming, demote any other confirmed bids on the same spot that are lower
+      let lockedSpotIds = [...(file.lockedSpotIds ?? [])];
+
       if (action === "confirm") {
-        for (let i = 0; i < next.length; i++) {
+        for (let i = 0; i < nextBids.length; i++) {
           if (
             i !== idx &&
-            next[i].spotId === target.spotId &&
-            next[i].status === "confirmed" &&
-            next[i].amount < target.amount
+            nextBids[i].spotId === target.spotId &&
+            nextBids[i].status === "confirmed" &&
+            nextBids[i].amount < target.amount
           ) {
-            next[i] = {
-              ...next[i],
+            nextBids[i] = {
+              ...nextBids[i],
               status: "rejected",
               updatedAt: new Date().toISOString(),
               note:
-                (next[i].note ? next[i].note + " | " : "") +
+                (nextBids[i].note ? nextBids[i].note + " | " : "") +
                 "Outbid — refund deposit manually.",
             };
           }
         }
+        if (!lockedSpotIds.includes(target.spotId)) {
+          lockedSpotIds = [...lockedSpotIds, target.spotId];
+        }
       }
 
-      return { result: next[idx], bids: next };
+      return {
+        result: nextBids[idx],
+        file: { bids: nextBids, lockedSpotIds },
+      };
     });
 
     if ("error" in outcome) {
@@ -146,15 +155,18 @@ export async function POST(request: Request) {
 
   if (action === "update") {
     const id = String(body.id ?? "");
-    const outcome = await withBidsLock(async (bids) => {
-      const idx = bids.findIndex((b) => b.id === id);
+    const outcome = await withAuctionLock(async (file) => {
+      const idx = file.bids.findIndex((b) => b.id === id);
       if (idx < 0) return { error: "Bid not found." };
-      const next = [...bids];
+      const next = [...file.bids];
       const current = { ...next[idx] };
       if (body.brandName !== undefined) current.brandName = String(body.brandName).trim();
       if (body.handle !== undefined) current.handle = normalizeHandle(String(body.handle));
       if (body.website !== undefined) current.website = String(body.website).trim();
       if (body.logoUrl !== undefined) current.logoUrl = String(body.logoUrl).trim();
+      if (body.keepBackground !== undefined) {
+        current.keepBackground = Boolean(body.keepBackground);
+      }
       if (body.amount !== undefined) {
         const amount = Number(body.amount);
         if (!Number.isFinite(amount) || amount <= 0) return { error: "Invalid amount." };
@@ -174,7 +186,7 @@ export async function POST(request: Request) {
       }
       current.updatedAt = new Date().toISOString();
       next[idx] = current;
-      return { result: current, bids: next };
+      return { result: current, file: { ...file, bids: next } };
     });
 
     if ("error" in outcome) {
@@ -221,9 +233,9 @@ export async function POST(request: Request) {
       note: body.note ? String(body.note) : "Added manually in admin.",
     };
 
-    const outcome = await withBidsLock(async (bids) => {
-      // If confirming a higher bid, mark lower confirmed as outbid
-      let next = [...bids, bid];
+    const outcome = await withAuctionLock(async (file) => {
+      let next = [...file.bids, bid];
+      let lockedSpotIds = [...(file.lockedSpotIds ?? [])];
       if (status === "confirmed") {
         next = next.map((b) => {
           if (
@@ -242,8 +254,11 @@ export async function POST(request: Request) {
           }
           return b;
         });
+        if (!lockedSpotIds.includes(spotId)) {
+          lockedSpotIds = [...lockedSpotIds, spotId];
+        }
       }
-      return { result: bid, bids: next };
+      return { result: bid, file: { bids: next, lockedSpotIds } };
     });
 
     if ("error" in outcome) {
@@ -263,9 +278,9 @@ export async function POST(request: Request) {
     }
 
     const now = new Date().toISOString();
-    const outcome = await withBidsLock(async (bids) => {
-      const existing = highestConfirmedForSpot(bids, spotId);
-      let next = [...bids];
+    const outcome = await withAuctionLock(async (file) => {
+      const existing = highestConfirmedForSpot(file.bids, spotId);
+      let next = [...file.bids];
       if (existing) {
         next = next.map((b) =>
           b.id === existing.id
@@ -286,7 +301,7 @@ export async function POST(request: Request) {
             : b,
         );
         const updated = next.find((b) => b.id === existing.id)!;
-        return { result: updated, bids: next };
+        return { result: updated, file: { ...file, bids: next } };
       }
       const bid: Bid = {
         id: newBidId(),
@@ -302,7 +317,7 @@ export async function POST(request: Request) {
         updatedAt: now,
         note: "Set as current holder in admin.",
       };
-      return { result: bid, bids: [...next, bid] };
+      return { result: bid, file: { ...file, bids: [...next, bid] } };
     });
 
     if ("error" in outcome) {

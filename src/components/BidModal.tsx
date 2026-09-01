@@ -2,8 +2,15 @@
 
 import { useEffect, useId, useState, type FormEvent } from "react";
 import { CONFIG } from "@/config";
-import { calcDeposit, money } from "@/lib/auction";
+import {
+  calcDeposit,
+  lockPaymentUrl,
+  money,
+  normalizeHandle,
+} from "@/lib/auction";
 import type { SpotPublicState } from "@/lib/types";
+
+const HANDLE_KEY = "brandmypiano-handle";
 
 type Props = {
   spot: SpotPublicState | null;
@@ -36,12 +43,17 @@ export function BidModal({
     amount: number;
     spotId: number;
     brandName: string;
+    isLeader: boolean;
   } | null>(null);
 
   useEffect(() => {
     if (!open || !spot) return;
+    const saved =
+      typeof window !== "undefined"
+        ? localStorage.getItem(HANDLE_KEY) ?? ""
+        : "";
     setBrandName("");
-    setHandle("");
+    setHandle(saved);
     setWebsite("");
     setLogoUrl("");
     setLogoFileName("");
@@ -66,6 +78,20 @@ export function BidModal({
   const depositPreview = Number.isFinite(parsedAmount)
     ? calcDeposit(parsedAmount)
     : 0;
+  const normalizedHandle = normalizeHandle(handle);
+  const isCurrentLeader =
+    Boolean(spot.holderHandle) &&
+    normalizedHandle.length > 1 &&
+    spot.holderHandle === normalizedHandle &&
+    !spot.locked;
+  const leaderDeposit = spot.currentBid ? calcDeposit(spot.currentBid) : depositPreview;
+  const payUrl = isCurrentLeader
+    ? lockPaymentUrl(paymentLink, leaderDeposit)
+    : "";
+  const donePayUrl =
+    done?.isLeader && paymentLink
+      ? lockPaymentUrl(paymentLink, done.deposit)
+      : "";
 
   async function uploadLogo(file: File): Promise<string> {
     const body = new FormData();
@@ -101,6 +127,10 @@ export function BidModal({
       setError("The auction has ended.");
       return;
     }
+    if (spot!.locked) {
+      setError("This spot is locked.");
+      return;
+    }
     setBusy(true);
     setError("");
     try {
@@ -110,7 +140,7 @@ export function BidModal({
         body: JSON.stringify({
           spotId: spot!.spotId,
           brandName,
-          handle,
+          handle: normalizedHandle,
           website,
           logoUrl: logoUrl.trim(),
           amount: Number(amount),
@@ -122,11 +152,20 @@ export function BidModal({
         setBusy(false);
         return;
       }
+      if (typeof window !== "undefined") {
+        localStorage.setItem(HANDLE_KEY, normalizedHandle);
+      }
+      const leader =
+        data.bid &&
+        data.board?.spots?.find(
+          (s: SpotPublicState) => s.spotId === data.bid.spotId,
+        );
       setDone({
         deposit: data.bid.deposit,
         amount: data.bid.amount,
         spotId: data.bid.spotId,
         brandName: data.bid.brandName,
+        isLeader: leader?.holderHandle === normalizedHandle,
       });
       onSubmitted();
     } catch {
@@ -169,50 +208,78 @@ export function BidModal({
           </button>
         </div>
 
+        {spot.locked && (
+          <p className="mb-4 rounded-md border border-line bg-bg/40 px-3 py-2 text-sm text-dim">
+            This spot is locked. The winner is set.
+          </p>
+        )}
+
+        {isCurrentLeader && !done && payUrl && (
+          <div className="mb-4 rounded-md border border-gold/40 bg-gold/5 px-3 py-3 text-sm">
+            <p className="text-cream">You are leading this spot.</p>
+            <a
+              href={payUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="focus-ring mt-2 inline-block rounded-md px-4 py-2 font-medium transition hover:opacity-90"
+              style={{ background: "var(--button-bg)", color: "var(--button-text)" }}
+            >
+              Pay to lock this spot
+            </a>
+            <p className="mt-2 text-xs text-dim">
+              Payment does not happen automatically when you bid. Lock after you
+              pay the deposit.
+            </p>
+          </div>
+        )}
+
         {done ? (
           <div className="space-y-4 text-sm leading-relaxed text-dim">
             <p className="text-cream">
-              Bid saved as <span className="text-gold">pending</span>. It will
-              not show on the public board until I confirm your deposit.
+              Your bid is live on spot {done.spotId} — {money(done.amount)} for{" "}
+              {done.brandName}.
             </p>
-            <ol className="list-decimal space-y-2 pl-5">
-              <li>
-                Pay the {money(done.deposit)} deposit
-                {paymentLink ? (
-                  <>
-                    {" "}
-                    via{" "}
+            {done.isLeader ? (
+              <>
+                <p>
+                  You are the current leader on this spot only. If someone outbids
+                  you here, they take the logo on this part — other spots are
+                  separate races.
+                </p>
+                {donePayUrl ? (
+                  <a
+                    href={donePayUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="focus-ring inline-block w-full rounded-md px-4 py-3 text-center font-medium transition hover:opacity-90"
+                    style={{
+                      background: "var(--button-bg)",
+                      color: "var(--button-text)",
+                    }}
+                  >
+                    Pay to lock this spot
+                  </a>
+                ) : (
+                  <p>
+                    DM{" "}
                     <a
-                      href={paymentLink}
+                      href={CONFIG.xProfile}
                       target="_blank"
                       rel="noreferrer"
-                      className="text-gold underline underline-offset-2 hover:text-gold-hover"
+                      className="text-gold underline underline-offset-2"
                     >
-                      this payment link
-                    </a>
-                  </>
-                ) : (
-                  <> (I will send or confirm a payment link when you DM me)</>
+                      {CONFIG.handle}
+                    </a>{" "}
+                    for payment details, then I confirm in admin to lock the spot.
+                  </p>
                 )}
-                .
-              </li>
-              <li>
-                Post or DM{" "}
-                <a
-                  href={CONFIG.xProfile}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-gold underline underline-offset-2 hover:text-gold-hover"
-                >
-                  {CONFIG.handle}
-                </a>{" "}
-                with: spot {done.spotId}, {done.brandName}, {money(done.amount)}.
-              </li>
-            </ol>
-            <p>
-              If you are outbid later, I refund the deposit by hand in v1. I
-              approve every logo by hand and can refuse one.
-            </p>
+              </>
+            ) : (
+              <p>
+                You were outbid on submit — check the live board. Raise your bid on
+                this spot only.
+              </p>
+            )}
             <button
               type="button"
               onClick={onClose}
@@ -237,7 +304,7 @@ export function BidModal({
                 onChange={(e) => setBrandName(e.target.value)}
                 className="focus-ring w-full rounded-md border border-line bg-bg px-3 py-3 text-cream"
                 placeholder="Acme Coffee"
-                disabled={ended || busy}
+                disabled={ended || busy || spot.locked}
               />
             </label>
             <label className="block text-sm">
@@ -248,7 +315,7 @@ export function BidModal({
                 onChange={(e) => setHandle(e.target.value)}
                 className="focus-ring w-full rounded-md border border-line bg-bg px-3 py-3 text-cream"
                 placeholder="@yourbrand"
-                disabled={ended || busy}
+                disabled={ended || busy || spot.locked}
               />
             </label>
             <label className="block text-sm">
@@ -258,7 +325,7 @@ export function BidModal({
                 onChange={(e) => setWebsite(e.target.value)}
                 className="focus-ring w-full rounded-md border border-line bg-bg px-3 py-3 text-cream"
                 placeholder="https://"
-                disabled={ended || busy}
+                disabled={ended || busy || spot.locked}
               />
             </label>
             <label className="block text-sm">
@@ -271,7 +338,7 @@ export function BidModal({
                 }}
                 className="focus-ring w-full rounded-md border border-line bg-bg px-3 py-3 text-cream"
                 placeholder="https://…/logo.png"
-                disabled={ended || busy}
+                disabled={ended || busy || spot.locked}
               />
             </label>
             <label className="block text-sm">
@@ -280,7 +347,7 @@ export function BidModal({
                 type="file"
                 accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
                 className="focus-ring block w-full text-sm text-dim file:mr-3 file:rounded-md file:border-0 file:bg-gold file:px-3 file:py-2 file:text-sm file:font-medium file:text-[var(--button-text)]"
-                disabled={ended || busy}
+                disabled={ended || busy || spot.locked}
                 onChange={(e) => onLogoFile(e.target.files?.[0] ?? null)}
               />
               {logoFileName && (
@@ -288,10 +355,6 @@ export function BidModal({
                   Uploaded: {logoFileName}
                 </span>
               )}
-              <span className="mt-1.5 block text-xs text-dim">
-                No logo yet? A letter avatar shows until I paste your logo in
-                admin.
-              </span>
             </label>
             <label className="block text-sm">
               <span className="mb-1.5 block text-dim">Bid amount (USD)</span>
@@ -303,14 +366,14 @@ export function BidModal({
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 className="focus-ring w-full rounded-md border border-line bg-bg px-3 py-3 text-cream"
-                disabled={ended || busy}
+                disabled={ended || busy || spot.locked}
               />
             </label>
             <p className="text-sm text-dim">
-              Deposit to hold this bid:{" "}
-              <span className="text-cream">{money(depositPreview)}</span>{" "}
-              (20%, minimum $5). New bids must beat the current by at least $
-              {CONFIG.minRaise}.
+              Bids show on the live board immediately for this spot only. Minimum
+              raise ${CONFIG.minRaise}. Deposit to lock:{" "}
+              <span className="text-cream">{money(depositPreview)}</span> (20%,
+              min $5).
             </p>
             {error && (
               <p className="rounded-md border border-red-900/50 bg-red-950/30 px-3 py-2 text-sm text-red-200">
@@ -319,11 +382,11 @@ export function BidModal({
             )}
             <button
               type="submit"
-              disabled={ended || busy}
+              disabled={ended || busy || spot.locked}
               className="focus-ring w-full rounded-md px-4 py-3.5 font-medium transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
               style={{ background: "var(--button-bg)", color: "var(--button-text)" }}
             >
-              {busy ? "Saving…" : "Place pending bid"}
+              {busy ? "Saving…" : spot.hasBid ? "Place outbid" : "Place bid"}
             </button>
           </form>
         )}

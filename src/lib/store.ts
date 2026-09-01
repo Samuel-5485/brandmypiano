@@ -7,7 +7,17 @@ const LOCAL_PATH = path.join(process.cwd(), "data", "bids.json");
 const BLOB_PATHNAME = "brandmypiano/bids.json";
 
 function emptyFile(): BidsFile {
-  return { bids: [] };
+  return { bids: [], lockedSpotIds: [] };
+}
+
+function normalizeFile(parsed: BidsFile | null): BidsFile {
+  if (!parsed || !Array.isArray(parsed.bids)) return emptyFile();
+  return {
+    bids: parsed.bids,
+    lockedSpotIds: Array.isArray(parsed.lockedSpotIds)
+      ? parsed.lockedSpotIds.filter((id) => Number.isInteger(id))
+      : [],
+  };
 }
 
 function hasBlobToken(): boolean {
@@ -17,9 +27,7 @@ function hasBlobToken(): boolean {
 async function readLocal(): Promise<BidsFile> {
   try {
     const raw = await fs.readFile(LOCAL_PATH, "utf8");
-    const parsed = JSON.parse(raw) as BidsFile;
-    if (!parsed || !Array.isArray(parsed.bids)) return emptyFile();
-    return parsed;
+    return normalizeFile(JSON.parse(raw) as BidsFile);
   } catch {
     return emptyFile();
   }
@@ -40,9 +48,7 @@ async function readBlob(): Promise<BidsFile | null> {
     if (!match) return null;
     const res = await fetch(match.url, { cache: "no-store" });
     if (!res.ok) return null;
-    const parsed = (await res.json()) as BidsFile;
-    if (!parsed || !Array.isArray(parsed.bids)) return emptyFile();
-    return parsed;
+    return normalizeFile((await res.json()) as BidsFile);
   } catch {
     return null;
   }
@@ -51,7 +57,6 @@ async function readBlob(): Promise<BidsFile | null> {
 async function writeBlob(data: BidsFile): Promise<void> {
   if (!hasBlobToken()) return;
   const body = JSON.stringify(data, null, 2);
-  // Replace prior versions so we don't accumulate blobs
   try {
     const { blobs } = await list({ prefix: "brandmypiano/", limit: 50 });
     const toDelete = blobs
@@ -69,31 +74,41 @@ async function writeBlob(data: BidsFile): Promise<void> {
   });
 }
 
-export async function readBids(): Promise<Bid[]> {
+export async function readAuctionFile(): Promise<BidsFile> {
   if (hasBlobToken()) {
     const fromBlob = await readBlob();
-    if (fromBlob) return fromBlob.bids;
+    if (fromBlob) return fromBlob;
   }
-  const local = await readLocal();
-  return local.bids;
+  return readLocal();
+}
+
+export async function readBids(): Promise<Bid[]> {
+  const file = await readAuctionFile();
+  return file.bids;
+}
+
+export async function writeAuctionFile(data: BidsFile): Promise<void> {
+  const normalized = normalizeFile(data);
+  await writeLocal(normalized);
+  if (hasBlobToken()) {
+    await writeBlob(normalized);
+  }
 }
 
 export async function writeBids(bids: Bid[]): Promise<void> {
-  const data: BidsFile = { bids };
-  await writeLocal(data);
-  if (hasBlobToken()) {
-    await writeBlob(data);
-  }
+  const file = await readAuctionFile();
+  await writeAuctionFile({ ...file, bids });
 }
 
-export async function withBidsLock<T>(
-  fn: (bids: Bid[]) => Promise<{ result: T; bids: Bid[] } | { error: string }>,
+export async function withAuctionLock<T>(
+  fn: (
+    file: BidsFile,
+  ) => Promise<{ result: T; file: BidsFile } | { error: string }>,
 ): Promise<{ result: T } | { error: string }> {
-  // Simple read-modify-write. Fine for low traffic auction.
-  const bids = await readBids();
-  const outcome = await fn(bids);
+  const file = await readAuctionFile();
+  const outcome = await fn(file);
   if ("error" in outcome) return { error: outcome.error };
-  await writeBids(outcome.bids);
+  await writeAuctionFile(outcome.file);
   return { result: outcome.result };
 }
 
