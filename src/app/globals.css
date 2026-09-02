@@ -46,19 +46,19 @@
 }
 
 [data-theme="light"] {
-  --bg: #f6f1e8;
+  --bg: #f7f3ec;
   --bg-card: #ffffff;
   --text: #16120e;
   --text-dim: #6f675d;
   --gold: #9a7438;
   --gold-2: #7c5c28;
-  --line: rgba(20, 17, 14, 0.12);
-  --header-bg: color-mix(in srgb, var(--bg) 90%, transparent);
-  --piano-stage-bg: #e7e0d4;
+  --line: rgba(22, 18, 14, 0.12);
+  --header-bg: color-mix(in srgb, var(--bg) 92%, transparent);
+  --piano-stage-bg: #ffffff;
   --button-bg: #16120e;
-  --button-text: #f3ece1;
-  --body-glow-a: rgba(154, 116, 56, 0.1);
-  --body-glow-b: rgba(20, 17, 14, 0.04);
+  --button-text: #f7f3ec;
+  --body-glow-a: rgba(154, 116, 56, 0.08);
+  --body-glow-b: rgba(22, 18, 14, 0.03);
   --card: var(--bg-card);
   --cream: var(--text);
   --dim: var(--text-dim);
@@ -120,7 +120,8 @@ body {
 
 [data-theme="light"] .piano-stage {
   background: var(--piano-stage-bg);
-  border-color: color-mix(in srgb, var(--text) 14%, transparent);
+  border-color: var(--line);
+  box-shadow: inset 0 0 0 1px rgba(22, 18, 14, 0.06);
 }
 
 .focus-ring:focus-visible {

@@ -16,6 +16,10 @@ export type Bid = {
   createdAt: string;
   updatedAt: string;
   note?: string;
+  /** Set in admin after Polar payment is verified. */
+  paidAt?: string;
+  /** Set in admin after a beaten payer is refunded in Polar. */
+  refundedAt?: string;
 };
 
 export type BidsFile = {

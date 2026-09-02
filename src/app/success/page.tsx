@@ -15,8 +15,9 @@ export default function SuccessPage() {
         Thanks. Payment received.
       </h1>
       <p className="mt-5 text-base leading-relaxed text-dim">
-        I will lock this spot when I match your Polar checkout in admin. Do not
-        pay twice.
+        I will confirm your payment in admin. If you stay 1st, I lock the spot
+        after any beaten payers are refunded. Do not pay twice.{" "}
+        {CONFIG.refundPublicCopy}
       </p>
       <Link
         href="/"

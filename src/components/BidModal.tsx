@@ -251,8 +251,9 @@ export function BidModal({
               Pay to lock this spot
             </a>
             <p className="mt-2 text-xs leading-relaxed text-dim">
-              You are the highest bid on this spot. Paying through Polar locks it
-              for 12 months. No refund after a confirmed payment.
+              Pay your bid through Polar. If someone outbids you before lock, you
+              are refunded. After I confirm payment and lock this spot, no refund.{" "}
+              {CONFIG.refundPublicCopy}
             </p>
           </div>
         )}
@@ -285,8 +286,9 @@ export function BidModal({
                       Pay to lock this spot
                     </a>
                     <p className="text-xs">
-                      You are the highest bid on this spot. Paying through Polar
-                      locks it for 12 months. No refund after a confirmed payment.
+                      Pay through Polar. I confirm payment in admin, then lock the
+                      spot. {CONFIG.refundPublicCopy} Logo stays{" "}
+                      {CONFIG.stickerDuration}
                     </p>
                   </>
                 ) : (

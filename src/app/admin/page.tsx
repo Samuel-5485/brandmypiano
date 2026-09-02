@@ -3,13 +3,14 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { AdminLogoField } from "@/components/AdminLogoField";
 import { CONFIG } from "@/config";
-import { money } from "@/lib/auction";
+import { getBidPaymentStatus, money } from "@/lib/auction";
 import type { Bid, PublicBoard } from "@/lib/types";
 
 type AdminPayload = {
   bids: Bid[];
   board: PublicBoard;
   adminNote: string;
+  lockedSpotIds: number[];
 };
 
 export default function AdminPage() {
@@ -133,9 +134,7 @@ export default function AdminPage() {
   }
 
   const bids = data?.bids ?? [];
-  const pending = bids.filter((b) => b.status === "pending");
-  const confirmed = bids.filter((b) => b.status === "confirmed");
-  const rejected = bids.filter((b) => b.status === "rejected");
+  const lockedSpotIds = data?.lockedSpotIds ?? [];
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
@@ -253,26 +252,14 @@ export default function AdminPage() {
       </section>
 
       <BidTable
-        title={`Pending (${pending.length})`}
-        bids={pending}
+        title={`All bids (${bids.length})`}
+        bids={bids}
+        allBids={bids}
+        lockedSpotIds={lockedSpotIds}
         busy={busy}
-        onConfirm={(id) => act({ action: "confirm", id })}
-        onReject={(id) => act({ action: "reject", id })}
-        onUpdate={(id, patch) => act({ action: "update", id, ...patch })}
-      />
-      <BidTable
-        title={`Confirmed (${confirmed.length})`}
-        bids={confirmed}
-        busy={busy}
-        onConfirm={(id) => act({ action: "confirm", id })}
-        onReject={(id) => act({ action: "reject", id })}
-        onUpdate={(id, patch) => act({ action: "update", id, ...patch })}
-      />
-      <BidTable
-        title={`Rejected (${rejected.length})`}
-        bids={rejected}
-        busy={busy}
-        onConfirm={(id) => act({ action: "confirm", id })}
+        onConfirmPayment={(id) => act({ action: "confirm_payment", id })}
+        onRefund={(id) => act({ action: "refund", id })}
+        onLockSpot={(id) => act({ action: "lock_spot", id })}
         onReject={(id) => act({ action: "reject", id })}
         onUpdate={(id, patch) => act({ action: "update", id, ...patch })}
       />
@@ -283,21 +270,30 @@ export default function AdminPage() {
 function BidTable({
   title,
   bids,
+  allBids,
+  lockedSpotIds,
   busy,
-  onConfirm,
+  onConfirmPayment,
+  onRefund,
+  onLockSpot,
   onReject,
   onUpdate,
 }: {
   title: string;
   bids: Bid[];
+  allBids: Bid[];
+  lockedSpotIds: number[];
   busy: boolean;
-  onConfirm: (id: string) => void;
+  onConfirmPayment: (id: string) => void;
+  onRefund: (id: string) => void;
+  onLockSpot: (id: string) => void;
   onReject: (id: string) => void;
   onUpdate: (id: string, patch: Record<string, unknown>) => void;
 }) {
   return (
     <section className="mt-10">
       <h2 className="font-display text-xl text-cream">{title}</h2>
+      <p className="mt-1 text-xs text-dim">{CONFIG.refundPublicCopy}</p>
       <div className="mt-3 overflow-x-auto rounded-xl border border-line">
         <table className="min-w-full text-left text-sm">
           <thead className="bg-card text-dim">
@@ -308,18 +304,25 @@ function BidTable({
               <th className="px-3 py-2">Amount</th>
               <th className="px-3 py-2">Deposit</th>
               <th className="px-3 py-2">Status</th>
+              <th className="px-3 py-2">Payment</th>
               <th className="px-3 py-2">Actions</th>
             </tr>
           </thead>
           <tbody>
             {bids.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-3 py-4 text-dim">
+                <td colSpan={8} className="px-3 py-4 text-dim">
                   None
                 </td>
               </tr>
             )}
-            {bids.map((bid) => (
+            {bids.map((bid) => {
+              const paymentStatus = getBidPaymentStatus(
+                bid,
+                allBids,
+                lockedSpotIds,
+              );
+              return (
               <tr key={bid.id} className="border-t border-line align-top">
                 <td className="px-3 py-3 text-cream">{bid.spotId}</td>
                 <td className="px-3 py-3">
@@ -330,6 +333,16 @@ function BidTable({
                   )}
                   {bid.note && (
                     <div className="mt-1 text-xs text-dim">{bid.note}</div>
+                  )}
+                  {bid.paidAt && (
+                    <div className="mt-1 text-xs text-gold">
+                      Paid {new Date(bid.paidAt).toLocaleString()}
+                    </div>
+                  )}
+                  {bid.refundedAt && (
+                    <div className="mt-1 text-xs text-dim">
+                      Refunded {new Date(bid.refundedAt).toLocaleString()}
+                    </div>
                   )}
                 </td>
                 <td className="px-3 py-3">
@@ -365,16 +378,39 @@ function BidTable({
                     <option value="rejected">rejected</option>
                   </select>
                 </td>
+                <td className="px-3 py-3 text-dim">
+                  {paymentStatus ?? "—"}
+                </td>
                 <td className="px-3 py-3">
                   <div className="flex flex-col gap-1">
-                    {bid.status !== "confirmed" && (
+                    {!bid.paidAt && !bid.refundedAt && bid.status !== "rejected" && (
                       <button
                         type="button"
                         disabled={busy}
-                        onClick={() => onConfirm(bid.id)}
+                        onClick={() => onConfirmPayment(bid.id)}
                         className="text-left text-gold hover:text-gold-hover"
                       >
-                        Confirm
+                        Confirm payment
+                      </button>
+                    )}
+                    {paymentStatus === "beaten" && (
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => onRefund(bid.id)}
+                        className="text-left text-dim hover:text-cream"
+                      >
+                        Refund this bid
+                      </button>
+                    )}
+                    {paymentStatus === "leading" && bid.paidAt && (
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => onLockSpot(bid.id)}
+                        className="text-left text-gold hover:text-gold-hover"
+                      >
+                        Lock spot
                       </button>
                     )}
                     {bid.status !== "rejected" && (
@@ -410,7 +446,8 @@ function BidTable({
                   </div>
                 </td>
               </tr>
-            ))}
+            );
+            })}
           </tbody>
         </table>
       </div>

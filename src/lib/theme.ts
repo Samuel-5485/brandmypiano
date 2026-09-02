@@ -1,10 +1,15 @@
 export const THEME_STORAGE_KEY = "brandmypiano-theme";
 
-export type ThemePreference = "default" | "dark" | "system";
+export type ThemePreference = "default" | "dark" | "light" | "system";
 export type ResolvedTheme = "default" | "dark" | "light";
 
 export function isThemePreference(value: string | null): value is ThemePreference {
-  return value === "default" || value === "dark" || value === "system";
+  return (
+    value === "default" ||
+    value === "dark" ||
+    value === "light" ||
+    value === "system"
+  );
 }
 
 export function resolveTheme(
@@ -13,6 +18,7 @@ export function resolveTheme(
 ): ResolvedTheme {
   if (preference === "default") return "default";
   if (preference === "dark") return "dark";
+  if (preference === "light") return "light";
   const dark =
     prefersDark ??
     (typeof window !== "undefined" &&

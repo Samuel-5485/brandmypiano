@@ -87,7 +87,7 @@ export function AuctionApp({ initialBoard }: Props) {
           <h1 className="font-display max-w-3xl text-4xl leading-[1.08] text-cream sm:text-5xl md:text-6xl">
             {CONFIG.headline}
           </h1>
-          <p className="mt-5 max-w-2xl text-base leading-relaxed text-dim sm:text-lg">
+          <p className="mt-5 max-w-2xl whitespace-pre-line text-base leading-relaxed text-dim sm:text-lg">
             {CONFIG.heroLede}
           </p>
 
@@ -153,33 +153,38 @@ export function AuctionApp({ initialBoard }: Props) {
 
         <section className="mx-auto max-w-5xl px-4 py-12 sm:px-6">
           <h2 className="font-display text-3xl text-cream">How it works</h2>
-          <ol className="mt-8 grid gap-4 sm:grid-cols-3">
-            {[
-              {
-                n: "1",
-                t: "Pick a spot and bid",
-                d: "Choose one of eleven vinyl places on the keyboard, stand, bench, bag, pedal, or headphones.",
-              },
-              {
-                n: "2",
-                t: "The auction buys the kit",
-                d: "Deposits and winning bids fund the Yamaha PSR-E383 — 61 portable keys plus stand, bench, bag, and pedal.",
-              },
-              {
-                n: "3",
-                t: "Your logo rides along for 12 months",
-                d: "From proof photos onward — practice, travel, and filmed sessions.",
-              },
-            ].map((step) => (
-              <li key={step.n} className="card-surface rounded-xl p-5">
-                <p className="text-xs uppercase tracking-[0.18em] text-gold">
-                  Step {step.n}
-                </p>
-                <h3 className="mt-2 font-display text-xl text-cream">{step.t}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-dim">{step.d}</p>
-              </li>
-            ))}
+          <ol className="mt-8 max-w-2xl space-y-4 text-base leading-relaxed text-dim">
+            <li>
+              <span className="font-medium text-cream">1.</span> Pick a spot and
+              bid.
+            </li>
+            <li>
+              <span className="font-medium text-cream">2.</span> Pay the bid
+              through Polar. If someone outbids you on that same spot, you are
+              refunded. If you stay 1st and lock, you are not refunded.
+            </li>
+            <li>
+              <span className="font-medium text-cream">3.</span> 1st place logo
+              stays on that part of the kit for {CONFIG.stickerDuration} —
+              practice, dorm, lessons, YouTube. Not worship services.
+            </li>
           </ol>
+          <p className="mt-6 max-w-2xl text-sm leading-relaxed text-dim">
+            {CONFIG.refundPublicCopy}
+          </p>
+          <ul className="mt-4 max-w-2xl space-y-2 text-sm leading-relaxed text-dim">
+            <li>
+              Paid + not locked = others may outbid that same spot. Beaten payer
+              is refunded.
+            </li>
+            <li>
+              Locked = nobody else can buy that spot. No refund to the locked
+              winner.
+            </li>
+            <li>
+              &ldquo;Pay to lock&rdquo; / admin Lock is the close.
+            </li>
+          </ul>
 
           <div className="mt-12">
             <h3 className="font-display text-2xl text-cream sm:text-3xl">
@@ -271,10 +276,7 @@ export function AuctionApp({ initialBoard }: Props) {
             </a>{" "}
             · {CONFIG.location}
           </p>
-          <p className="mt-3 text-sm text-dim">
-            Not affiliated with Yamaha. No ROI, impression, or church-mention
-            guarantee.
-          </p>
+          <p className="mt-3 text-sm text-dim">{CONFIG.refundPublicCopy}</p>
         </footer>
       </main>
 
@@ -298,44 +300,28 @@ function FaqSection() {
     bullets?: string[];
   }[] = [
     {
+      q: "How long does the sticker stay?",
+      a: "Until I no longer have this instrument.",
+    },
+    {
+      q: "Can two people buy spot 1?",
+      a: "Not after it is locked. Before lock, a higher bid can take 1st and the previous payment is refunded.",
+    },
+    {
       q: "Is this real?",
-      a: `Yes. I am ${CONFIG.name} (${CONFIG.handle}). I do not own the keyboard yet. Eleven separate spot auctions fund the PSR-E383 kit.`,
-    },
-    {
-      q: "Do spot 1 and spot 2 compete?",
-      a: "No. Spot 1 and spot 2 are different auctions. Five people can bid on spot 1; only the highest of those five goes on the music rest.",
-    },
-    {
-      q: "Payment",
-      bullets: [
-        "Pay only as leader — use Pay to lock while you are highest, or at end of auction if you still lead.",
-        "Polar amount is that spot's bid in cents (?amount= on the checkout link).",
-        "Polar is a one-time checkout, not a subscription.",
-        "Outbid before you pay = $0 charged.",
-        "Once I confirm payment and lock the spot, there is no refund.",
-        "I can reject a logo and ask for a new file before we print.",
-        "After Polar, the /success page explains that I confirm in admin before the spot locks.",
-      ],
+      a: `Yes. ${CONFIG.name} (${CONFIG.handle}), East Africa. The PSR-E383 is a real kit I will buy. Stickers are real vinyl. The branded kit is for practice, teaching, dorm, and videos — not the church pulpit.`,
     },
     {
       q: "Do I get guaranteed views or a church mention?",
-      a: "No. No ROI promise. No impression guarantee. No pulpit ads. No church shoutouts. Stickers live on my instrument, case, stand, or bag, and may appear in practice videos and photos — not forced into worship.",
-    },
-    {
-      q: "How long does the sticker stay?",
-      a: "12 months from proof photos after the keyboard arrives and stickers are applied.",
-    },
-    {
-      q: "Are you affiliated with Yamaha?",
-      a: "No.",
+      a: "No. No ROI. No church shoutouts. No pulpit ads.",
     },
     {
       q: "What if I get outbid?",
-      a: "If you never paid, nothing was charged. If you paid and the spot is not locked yet, DM me — locked spots are final.",
+      a: "If you already paid and you are no longer 1st on that spot, you get a refund. I process it in Polar after I confirm the new leader paid or the bid is beaten.\nIf you locked the spot after I confirmed payment, no refund.",
     },
     {
-      q: "Who approves the logo?",
-      a: "I do, by hand. I can reject a logo and ask for a new file.",
+      q: "Why is the goal $1,000?",
+      a: "Kit (keyboard, stand, bench, bag, pedal, headphones) + vinyl printing + keeping the project up while I own the keyboard. The E383 alone is less than $1,000. Extra is not a secret MacBook.",
     },
   ];
 

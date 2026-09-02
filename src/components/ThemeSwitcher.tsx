@@ -11,6 +11,7 @@ import {
 const OPTIONS: { value: ThemePreference; label: string }[] = [
   { value: "default", label: "Default" },
   { value: "dark", label: "Dark" },
+  { value: "light", label: "Light" },
   { value: "system", label: "System" },
 ];
 

@@ -56,6 +56,24 @@ export function highestForSpot(bids: Bid[], spotId: number): Bid | null {
   return list[0] ?? null;
 }
 
+export type BidPaymentStatus = "leading" | "beaten" | "locked";
+
+/** Public payment race status for a bid (leading / beaten / locked). */
+export function getBidPaymentStatus(
+  bid: Bid,
+  bids: Bid[],
+  lockedSpotIds: number[],
+): BidPaymentStatus | null {
+  if (bid.status === "rejected") return null;
+  const leader = highestForSpot(bids, bid.spotId);
+  if (!leader) return null;
+  const spotLocked = isSpotLocked(lockedSpotIds, bid.spotId);
+  if (spotLocked && leader.id === bid.id) return "locked";
+  if (leader.id === bid.id) return "leading";
+  if (bid.paidAt && !bid.refundedAt) return "beaten";
+  return null;
+}
+
 export function isSpotLocked(
   lockedSpotIds: number[] | undefined,
   spotId: number,
@@ -142,8 +160,7 @@ function bidResultFor(
 
   if (
     isSpotLocked(lockedSpotIds, bid.spotId) &&
-    leader?.id === bid.id &&
-    bid.status === "confirmed"
+    leader?.id === bid.id
   ) {
     return "Locked";
   }

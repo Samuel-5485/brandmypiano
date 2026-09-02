@@ -4,6 +4,8 @@ import {
   buildPublicBoard,
   calcDeposit,
   highestConfirmedForSpot,
+  highestForSpot,
+  isSpotLocked,
   normalizeHandle,
 } from "@/lib/auction";
 import { isAdminAuthenticated } from "@/lib/auth";
@@ -36,6 +38,8 @@ export async function GET(request: Request) {
       "amount",
       "deposit",
       "status",
+      "paidAt",
+      "refundedAt",
       "createdAt",
       "updatedAt",
       "note",
@@ -53,6 +57,8 @@ export async function GET(request: Request) {
         bid.amount,
         bid.deposit,
         bid.status,
+        bid.paidAt ?? "",
+        bid.refundedAt ?? "",
         bid.createdAt,
         bid.updatedAt,
         bid.note ?? "",
@@ -105,52 +111,121 @@ export async function POST(request: Request) {
 
   const action = body.action;
 
-  if (action === "confirm" || action === "reject") {
+  if (action === "confirm_payment") {
     const id = String(body.id ?? "");
     const outcome = await withAuctionLock(async (file) => {
       const idx = file.bids.findIndex((b) => b.id === id);
       if (idx < 0) return { error: "Bid not found." };
       const nextBids = [...file.bids];
       const target = { ...nextBids[idx] };
-      target.status = action === "confirm" ? "confirmed" : "rejected";
-      target.updatedAt = new Date().toISOString();
+      if (target.refundedAt) return { error: "Already refunded." };
+      const now = new Date().toISOString();
+      target.paidAt = now;
+      target.updatedAt = now;
       nextBids[idx] = target;
-
-      let lockedSpotIds = [...(file.lockedSpotIds ?? [])];
-
-      if (action === "confirm") {
-        for (let i = 0; i < nextBids.length; i++) {
-          if (
-            i !== idx &&
-            nextBids[i].spotId === target.spotId &&
-            nextBids[i].status === "confirmed" &&
-            nextBids[i].amount < target.amount
-          ) {
-            nextBids[i] = {
-              ...nextBids[i],
-              status: "rejected",
-              updatedAt: new Date().toISOString(),
-              note:
-                (nextBids[i].note ? nextBids[i].note + " | " : "") +
-                "Outbid — refund deposit manually.",
-            };
-          }
-        }
-        if (!lockedSpotIds.includes(target.spotId)) {
-          lockedSpotIds = [...lockedSpotIds, target.spotId];
-        }
-      }
-
-      return {
-        result: nextBids[idx],
-        file: { bids: nextBids, lockedSpotIds },
-      };
+      return { result: target, file: { ...file, bids: nextBids } };
     });
-
     if ("error" in outcome) {
       return NextResponse.json({ error: outcome.error }, { status: 400 });
     }
     return NextResponse.json({ ok: true, bid: outcome.result });
+  }
+
+  if (action === "refund") {
+    const id = String(body.id ?? "");
+    const outcome = await withAuctionLock(async (file) => {
+      const idx = file.bids.findIndex((b) => b.id === id);
+      if (idx < 0) return { error: "Bid not found." };
+      const nextBids = [...file.bids];
+      const target = { ...nextBids[idx] };
+      if (!target.paidAt) return { error: "No payment recorded for this bid." };
+      if (target.refundedAt) return { error: "Already refunded." };
+      if (isSpotLocked(file.lockedSpotIds ?? [], target.spotId)) {
+        const leader = highestForSpot(nextBids, target.spotId);
+        if (leader?.id === target.id) {
+          return { error: "Locked winner cannot be refunded." };
+        }
+      }
+      const now = new Date().toISOString();
+      target.refundedAt = now;
+      target.updatedAt = now;
+      nextBids[idx] = target;
+      return { result: target, file: { ...file, bids: nextBids } };
+    });
+    if ("error" in outcome) {
+      return NextResponse.json({ error: outcome.error }, { status: 400 });
+    }
+    return NextResponse.json({ ok: true, bid: outcome.result });
+  }
+
+  if (action === "lock_spot") {
+    const fromBidId = body.id ? String(body.id) : "";
+    const outcome = await withAuctionLock(async (file) => {
+      const spotId =
+        body.spotId !== undefined
+          ? Number(body.spotId)
+          : fromBidId
+            ? file.bids.find((b) => b.id === fromBidId)?.spotId
+            : NaN;
+      if (!getSpot(Number(spotId))) return { error: "Unknown spot." };
+      if (isSpotLocked(file.lockedSpotIds ?? [], Number(spotId))) {
+        return { error: "Spot already locked." };
+      }
+      const leader = highestForSpot(file.bids, Number(spotId));
+      if (!leader) return { error: "No bids on this spot." };
+      if (!leader.paidAt) return { error: "Current leader has not paid yet." };
+      const unpaidBeatens = file.bids.filter(
+        (b) =>
+          b.spotId === Number(spotId) &&
+          b.id !== leader.id &&
+          b.status !== "rejected" &&
+          b.paidAt &&
+          !b.refundedAt,
+      );
+      if (unpaidBeatens.length > 0) {
+        return { error: "Refund beaten payers before locking this spot." };
+      }
+      const now = new Date().toISOString();
+      const nextBids = file.bids.map((b) =>
+        b.id === leader.id
+          ? { ...b, status: "confirmed" as const, updatedAt: now }
+          : b,
+      );
+      const lockedSpotIds = [...(file.lockedSpotIds ?? []), Number(spotId)];
+      return {
+        result: nextBids.find((b) => b.id === leader.id)!,
+        file: { bids: nextBids, lockedSpotIds },
+      };
+    });
+    if ("error" in outcome) {
+      return NextResponse.json({ error: outcome.error }, { status: 400 });
+    }
+    return NextResponse.json({ ok: true, bid: outcome.result });
+  }
+
+  if (action === "reject") {
+    const id = String(body.id ?? "");
+    const outcome = await withAuctionLock(async (file) => {
+      const idx = file.bids.findIndex((b) => b.id === id);
+      if (idx < 0) return { error: "Bid not found." };
+      const nextBids = [...file.bids];
+      const target = { ...nextBids[idx] };
+      target.status = "rejected";
+      target.updatedAt = new Date().toISOString();
+      nextBids[idx] = target;
+      return { result: target, file: { ...file, bids: nextBids } };
+    });
+    if ("error" in outcome) {
+      return NextResponse.json({ error: outcome.error }, { status: 400 });
+    }
+    return NextResponse.json({ ok: true, bid: outcome.result });
+  }
+
+  if (action === "confirm") {
+    return NextResponse.json(
+      { error: "Use confirm_payment, then lock_spot when ready." },
+      { status: 400 },
+    );
   }
 
   if (action === "update") {
@@ -234,31 +309,7 @@ export async function POST(request: Request) {
     };
 
     const outcome = await withAuctionLock(async (file) => {
-      let next = [...file.bids, bid];
-      let lockedSpotIds = [...(file.lockedSpotIds ?? [])];
-      if (status === "confirmed") {
-        next = next.map((b) => {
-          if (
-            b.id !== bid.id &&
-            b.spotId === spotId &&
-            b.status === "confirmed" &&
-            b.amount < amount
-          ) {
-            return {
-              ...b,
-              status: "rejected" as const,
-              updatedAt: now,
-              note:
-                (b.note ? b.note + " | " : "") + "Outbid — refund deposit manually.",
-            };
-          }
-          return b;
-        });
-        if (!lockedSpotIds.includes(spotId)) {
-          lockedSpotIds = [...lockedSpotIds, spotId];
-        }
-      }
-      return { result: bid, file: { bids: next, lockedSpotIds } };
+      return { result: bid, file: { ...file, bids: [...file.bids, bid] } };
     });
 
     if ("error" in outcome) {

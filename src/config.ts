@@ -26,14 +26,18 @@ export const CONFIG = {
   siteName: "Brand My Piano",
   domainText: "Brand My Piano",
   headline: "Your brand, on my piano.",
+  adminNote:
+    "Confirm payment after Polar checkout. Refund beaten payers before locking the new 1st. Lock spot only when the current leader has paid.",
+  stickerDuration:
+    "as long as I own this PSR-E383. If I sell or replace it, stickers come off and I post proof.",
+  refundPublicCopy: "Outbid payments are refunded. Locked winners are not.",
   heroLede:
-    "I'm funding a Yamaha PSR-E383 portable keyboard kit so I can practice every day and play in church. Eleven sticker spots. I don't own it yet. The auction buys it.",
+    "I'm funding a Yamaha PSR-E383 kit so I can practice every day, teach students, play in my dorm, and post practice videos. Eleven sticker spots. I don't own it yet. The auction buys it.\n\nI will not take this branded keyboard into a church service. No pulpit ads.",
   story: `About 4 years ago my brother had a small practice piano. I learned on that and became decent, but I still lack confidence accompanying singers — rhythm, intros, following a vocalist. I want to play in church. This is a gift I want to use to serve God. I do not own a real keyboard yet. This site buys a Yamaha PSR-E383 — 61 keys, portable, not hammer action.
 
-Stickers live on my instrument, stand, bench, bag, pedal, or headphones. They can appear in practice videos and photos. They will not be forced into a worship service. I do not sell pulpit ads or promise church shoutouts.`,
+Stickers live on my instrument, stand, bench, bag, pedal, or headphones. They can appear in practice videos and photos from my dorm, lessons, and YouTube. They will not go into a worship service. I do not sell pulpit ads or promise church shoutouts.`,
   honestLine:
-    "You are not buying a sticker. You are buying 12 months on the instrument I practice on, travel with, and film. If the videos go nowhere, you bought a logo on a keyboard. If people watch, you sat in every frame.",
-  adminNote: "Confirm only after you see the Polar payment or a clear DM proof.",
+    "You are not buying a sticker. You are buying visibility on the instrument I practice on, travel with, and film — for as long as I own this PSR-E383. If I sell or replace it, stickers come off and I post proof. If the videos go nowhere, you bought a logo on a keyboard. If people watch, you sat in every frame.",
   parts: [
     { label: "Yamaha PSR-E383 (61 portable keys)", amount: 520 },
     { label: "X-stand + sustain pedal", amount: 89 },
