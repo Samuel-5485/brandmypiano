@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useState, type FormEvent } from "react";
+import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { CONFIG } from "@/config";
 import { lockPaymentUrl, money, normalizeHandle } from "@/lib/auction";
 import type { SpotPublicState } from "@/lib/types";
@@ -25,6 +25,7 @@ export function BidModal({
   onSubmitted,
 }: Props) {
   const titleId = useId();
+  const resetKeyRef = useRef<string | null>(null);
   const [brandName, setBrandName] = useState("");
   const [handle, setHandle] = useState("");
   const [website, setWebsite] = useState("");
@@ -40,22 +41,58 @@ export function BidModal({
     isLeader: boolean;
   } | null>(null);
 
+  const spotId = spot?.spotId ?? null;
+  const spotRef = useRef(spot);
+  spotRef.current = spot;
+
   useEffect(() => {
-    if (!open || !spot) return;
+    if (!open || spotId == null) {
+      if (!open) resetKeyRef.current = null;
+      return;
+    }
+
+    const resetKey = `${spotId}`;
+    if (resetKeyRef.current === resetKey) return;
+
+    // #region agent log
+    fetch("http://127.0.0.1:7681/ingest/d8bbfca4-00dd-492f-ae23-8c4a307aedad", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Debug-Session-Id": "c3e306",
+      },
+      body: JSON.stringify({
+        sessionId: "c3e306",
+        runId: "bid-form-fix",
+        hypothesisId: "A",
+        location: "BidModal.tsx:reset",
+        message: "form reset triggered",
+        data: {
+          spotId,
+          prevKey: resetKeyRef.current,
+          nextKey: resetKey,
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
+
+    resetKeyRef.current = resetKey;
     const saved =
       typeof window !== "undefined"
         ? localStorage.getItem(HANDLE_KEY) ?? ""
         : "";
+    const currentSpot = spotRef.current;
     setBrandName("");
     setHandle(saved);
     setWebsite("");
     setLogoUrl("");
     setLogoFileName("");
-    setAmount(String(spot.minNextBid));
+    setAmount(String(currentSpot?.minNextBid ?? ""));
     setError("");
     setDone(null);
     setBusy(false);
-  }, [open, spot]);
+  }, [open, spotId]);
 
   useEffect(() => {
     if (!open) return;
