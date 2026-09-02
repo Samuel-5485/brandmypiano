@@ -309,6 +309,8 @@ function OfferRow({
 }) {
   const isLeader = offer.rank === 1;
   const rankLabel = isLeader ? "1st" : ordinalRank(offer.rank);
+  const logoSize = isLeader ? "h-11 w-11" : "h-8 w-8";
+  const avatarText = isLeader ? "text-sm" : "text-xs";
 
   return (
     <li
@@ -323,9 +325,21 @@ function OfferRow({
           <p className="text-xs font-medium uppercase tracking-wide text-gold">
             {isViewer ? `You · ${rankLabel}` : rankLabel}
           </p>
-          <p className="mt-1 break-words font-medium text-cream">
-            {offer.brandName}
-          </p>
+          <div className="mt-1.5 flex items-center gap-2.5">
+            <span
+              className={`flex shrink-0 items-center justify-center overflow-hidden rounded-md bg-bg/50 ${logoSize}`}
+            >
+              <BrandLogo
+                brandName={offer.brandName}
+                logoUrl={offer.logoUrl}
+                className="h-full w-full"
+                mediaClassName={`object-contain ${avatarText}`}
+              />
+            </span>
+            <p className="min-w-0 break-words font-medium leading-snug text-cream">
+              {offer.brandName}
+            </p>
+          </div>
           <p className="mt-0.5 tabular-nums text-sm text-cream">
             {money(offer.amount)}
           </p>
