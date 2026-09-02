@@ -17,8 +17,9 @@ type Props = {
 
 export function AuctionApp({ initialBoard }: Props) {
   const [board, setBoard] = useState(initialBoard);
-  const [activeId, setActiveId] = useState<number | null>(null);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [prefillAmount, setPrefillAmount] = useState<number | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -37,13 +38,23 @@ export function AuctionApp({ initialBoard }: Props) {
   }, [refresh]);
 
   const activeSpot: SpotPublicState | null = useMemo(() => {
-    if (activeId == null) return null;
-    return board.spots.find((s) => s.spotId === activeId) ?? null;
-  }, [activeId, board.spots]);
+    if (selectedId == null) return null;
+    return board.spots.find((s) => s.spotId === selectedId) ?? null;
+  }, [selectedId, board.spots]);
 
-  function openSpot(id: number) {
-    setActiveId(id);
+  function selectSpot(id: number) {
+    setSelectedId(id);
+  }
+
+  function openBidModal(id: number, amount?: number) {
+    setSelectedId(id);
+    setPrefillAmount(amount ?? null);
     setModalOpen(true);
+  }
+
+  function closeBidModal() {
+    setModalOpen(false);
+    setPrefillAmount(null);
   }
 
   const progressWidth = `${Math.min(100, board.percent)}%`;
@@ -124,16 +135,20 @@ export function AuctionApp({ initialBoard }: Props) {
 
         <section className="mx-auto max-w-5xl px-4 py-6 sm:px-6" id="piano">
           <PianoGraphic
-            activeId={activeId}
+            activeId={selectedId}
             spots={board.spots}
-            onSelect={openSpot}
+            onSelect={(id) => {
+              selectSpot(id);
+              openBidModal(id);
+            }}
           />
         </section>
 
         <LiveAuctionBoard
           board={board}
-          activeId={activeId}
-          onBidSpot={openSpot}
+          selectedId={selectedId}
+          onSelectSpot={selectSpot}
+          onBidSpot={openBidModal}
         />
 
         <section className="mx-auto max-w-5xl px-4 py-12 sm:px-6">
@@ -258,7 +273,8 @@ export function AuctionApp({ initialBoard }: Props) {
         open={modalOpen}
         ended={board.ended}
         paymentLink={board.paymentLink}
-        onClose={() => setModalOpen(false)}
+        prefillAmount={prefillAmount}
+        onClose={closeBidModal}
         onSubmitted={refresh}
       />
     </>

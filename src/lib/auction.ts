@@ -3,6 +3,7 @@ import type {
   Bid,
   PublicBidHistoryEntry,
   PublicBoard,
+  SpotOffer,
   SpotPublicState,
 } from "@/lib/types";
 
@@ -103,32 +104,82 @@ export function validateNewBidAmount(
   return null;
 }
 
+export function ordinalRank(n: number): string {
+  if (n <= 0) return String(n);
+  const j = n % 10;
+  const k = n % 100;
+  if (j === 1 && k !== 11) return `${n}st`;
+  if (j === 2 && k !== 12) return `${n}nd`;
+  if (j === 3 && k !== 13) return `${n}rd`;
+  return `${n}th`;
+}
+
+/** All non-rejected bids on one spot, highest amount first. */
+export function rankedOffersForSpot(bids: Bid[], spotId: number): SpotOffer[] {
+  return activeBids(bids)
+    .filter((bid) => bid.spotId === spotId)
+    .sort((a, b) => b.amount - a.amount || b.createdAt.localeCompare(a.createdAt))
+    .map((bid, index) => ({
+      id: bid.id,
+      rank: index + 1,
+      brandName: bid.brandName,
+      handle: bid.handle,
+      amount: bid.amount,
+      createdAt: bid.createdAt,
+      logoUrl: bid.logoUrl?.trim() ? bid.logoUrl.trim() : null,
+    }));
+}
+
 function bidResultFor(
   bid: Bid,
   bids: Bid[],
   lockedSpotIds: number[],
 ): string {
-  const spot = getSpot(bid.spotId);
-  const leader = highestForSpot(bids, bid.spotId);
-  const confirmedLeader = highestConfirmedForSpot(bids, bid.spotId);
+  const spotName = getSpot(bid.spotId)?.name ?? `Spot ${bid.spotId}`;
+  const ranked = rankedOffersForSpot(bids, bid.spotId);
+  const rank = ranked.find((o) => o.id === bid.id)?.rank ?? 0;
+  const leader = ranked[0];
 
   if (
     isSpotLocked(lockedSpotIds, bid.spotId) &&
-    confirmedLeader?.id === bid.id &&
+    leader?.id === bid.id &&
     bid.status === "confirmed"
   ) {
-    return "locked";
+    return "Locked";
   }
-  if (leader?.id === bid.id) {
-    return "leading";
+
+  if (rank === 1) {
+    const priorOnSpot = activeBids(bids)
+      .filter(
+        (b) =>
+          b.spotId === bid.spotId &&
+          b.id !== bid.id &&
+          b.createdAt < bid.createdAt,
+      )
+      .sort(
+        (a, b) => b.amount - a.amount || b.createdAt.localeCompare(a.createdAt),
+      );
+    const previousLeader = priorOnSpot[0];
+    if (previousLeader && bid.amount > previousLeader.amount) {
+      const prevRankNow =
+        ranked.find((o) => o.id === previousLeader.id)?.rank ?? 2;
+      return `${bid.brandName} outbid ${previousLeader.brandName} on ${spotName} · ${money(bid.amount)} · ${previousLeader.brandName} is now ${ordinalRank(prevRankNow)}`;
+    }
+    if (priorOnSpot.length === 0) {
+      return `${bid.brandName} opened ${spotName} · ${money(bid.amount)}`;
+    }
+    return "Leading — logo on the keyboard";
   }
-  if (leader) {
-    return `outbid ${leader.brandName}`;
+
+  if (rank > 1) {
+    return ordinalRank(rank);
   }
+
   if (bid.status === "rejected") {
-    return "outbid";
+    return "Rejected";
   }
-  return spot ? `outbid` : "outbid";
+
+  return ordinalRank(rank);
 }
 
 export function buildHistory(
@@ -157,18 +208,23 @@ export function buildTickerLines(bids: Bid[]): string[] {
 
   for (const bid of active) {
     const spotName = getSpot(bid.spotId)?.name ?? `Spot ${bid.spotId}`;
-    const earlierOnSpot = active
+    const priorOnSpot = active
       .filter(
         (b) =>
           b.spotId === bid.spotId &&
           b.id !== bid.id &&
           b.createdAt < bid.createdAt,
       )
-      .sort((a, b) => b.amount - a.amount || b.createdAt.localeCompare(a.createdAt));
-    const previous = earlierOnSpot[0];
+      .sort(
+        (a, b) => b.amount - a.amount || b.createdAt.localeCompare(a.createdAt),
+      );
+    const previous = priorOnSpot[0];
     if (previous && bid.amount > previous.amount) {
+      const ranked = rankedOffersForSpot(bids, bid.spotId);
+      const prevRankNow =
+        ranked.find((o) => o.id === previous.id)?.rank ?? 2;
       lines.push(
-        `${bid.brandName} outbid ${previous.brandName} on ${spotName} · ${money(bid.amount)}`,
+        `${bid.brandName} outbid ${previous.brandName} on ${spotName} · ${money(bid.amount)} · ${previous.brandName} is now ${ordinalRank(prevRankNow)}`,
       );
     } else if (!previous) {
       lines.push(`${bid.brandName} opened ${spotName} · ${money(bid.amount)}`);
@@ -188,6 +244,7 @@ export function buildPublicBoard(
   const spots: SpotPublicState[] = CONFIG.spots.map((spot) => {
     const top = highestForSpot(bids, spot.id);
     const spotLocked = isSpotLocked(locked, spot.id);
+    const offers = rankedOffersForSpot(bids, spot.id);
     return {
       spotId: spot.id,
       name: spot.name,
@@ -201,8 +258,9 @@ export function buildPublicBoard(
       holderKeepBackground: Boolean(top?.keepBackground),
       hasBid: Boolean(top),
       minNextBid: minNextBid(bids, spot.id, locked),
-      bidCount: activeBids(bids).filter((b) => b.spotId === spot.id).length,
+      bidCount: offers.length,
       locked: spotLocked,
+      offers,
     };
   });
 

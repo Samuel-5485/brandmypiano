@@ -12,6 +12,7 @@ type Props = {
   open: boolean;
   ended: boolean;
   paymentLink: string;
+  prefillAmount?: number | null;
   onClose: () => void;
   onSubmitted: () => void;
 };
@@ -21,6 +22,7 @@ export function BidModal({
   open,
   ended,
   paymentLink,
+  prefillAmount,
   onClose,
   onSubmitted,
 }: Props) {
@@ -51,7 +53,7 @@ export function BidModal({
       return;
     }
 
-    const resetKey = `${spotId}`;
+    const resetKey = `${spotId}:${prefillAmount ?? ""}`;
     if (resetKeyRef.current === resetKey) return;
 
     resetKeyRef.current = resetKey;
@@ -65,11 +67,13 @@ export function BidModal({
     setWebsite("");
     setLogoUrl("");
     setLogoFileName("");
-    setAmount(String(currentSpot?.minNextBid ?? ""));
+    setAmount(
+      String(prefillAmount ?? currentSpot?.minNextBid ?? ""),
+    );
     setError("");
     setDone(null);
     setBusy(false);
-  }, [open, spotId]);
+  }, [open, spotId, prefillAmount]);
 
   useEffect(() => {
     if (!open) return;

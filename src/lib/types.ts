@@ -23,6 +23,16 @@ export type BidsFile = {
   lockedSpotIds?: number[];
 };
 
+export type SpotOffer = {
+  id: string;
+  rank: number;
+  brandName: string;
+  handle: string;
+  amount: number;
+  createdAt: string;
+  logoUrl: string | null;
+};
+
 export type SpotPublicState = {
   spotId: number;
   name: string;
@@ -38,6 +48,8 @@ export type SpotPublicState = {
   minNextBid: number;
   bidCount: number;
   locked: boolean;
+  /** All non-rejected bids on this spot, highest first. */
+  offers: SpotOffer[];
 };
 
 export type PublicBidHistoryEntry = {

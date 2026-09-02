@@ -71,7 +71,7 @@ async function writeBlob(data: BidsFile): Promise<void> {
     // ignore cleanup errors
   }
   await put(BLOB_PATHNAME, body, {
-    access: "public",
+    access: "private",
     contentType: "application/json",
     addRandomSuffix: false,
     allowOverwrite: true,
