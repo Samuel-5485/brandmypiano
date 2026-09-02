@@ -21,153 +21,114 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  // #region agent log
-  fetch("http://127.0.0.1:7681/ingest/d8bbfca4-00dd-492f-ae23-8c4a307aedad", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Debug-Session-Id": "c3e306",
-    },
-    body: JSON.stringify({
-      sessionId: "c3e306",
-      runId: "outbid-network",
-      hypothesisId: "B",
-      location: "api/bids/route.ts:POST:entry",
-      message: "POST /api/bids entry",
-      data: { hasBlobToken: Boolean(process.env.BLOB_READ_WRITE_TOKEN?.trim()) },
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {});
-  // #endregion
   try {
-  if (auctionEnded()) {
-    return NextResponse.json(
-      { error: "The auction has ended. No new bids are accepted." },
-      { status: 403 },
-    );
-  }
-
-  let body: {
-    spotId?: number;
-    brandName?: string;
-    handle?: string;
-    website?: string;
-    logoUrl?: string;
-    amount?: number;
-  };
-
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
-  }
-
-  const spotId = Number(body.spotId);
-  const spot = getSpot(spotId);
-  if (!spot) {
-    return NextResponse.json({ error: "Unknown spot." }, { status: 400 });
-  }
-
-  const brandName = String(body.brandName ?? "").trim();
-  const handle = normalizeHandle(String(body.handle ?? ""));
-  const website = String(body.website ?? "").trim();
-  const logoUrl = String(body.logoUrl ?? "").trim();
-  const amount = Number(body.amount);
-
-  if (brandName.length < 2) {
-    return NextResponse.json(
-      { error: "Brand name must be at least 2 characters." },
-      { status: 400 },
-    );
-  }
-  if (handle.length < 2) {
-    return NextResponse.json(
-      { error: "Add your X handle so I can reach you." },
-      { status: 400 },
-    );
-  }
-  if (website && !/^https?:\/\//i.test(website)) {
-    return NextResponse.json(
-      { error: "Website must start with http:// or https://." },
-      { status: 400 },
-    );
-  }
-  if (logoUrl) {
-    const ok =
-      logoUrl.startsWith("/logos/") ||
-      logoUrl.startsWith("data:image/") ||
-      /^https?:\/\//i.test(logoUrl);
-    if (!ok) {
+    if (auctionEnded()) {
       return NextResponse.json(
-        { error: "Logo must be an http(s) URL or an uploaded /logos/ path." },
+        { error: "The auction has ended. No new bids are accepted." },
+        { status: 403 },
+      );
+    }
+
+    let body: {
+      spotId?: number;
+      brandName?: string;
+      handle?: string;
+      website?: string;
+      logoUrl?: string;
+      amount?: number;
+    };
+
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+    }
+
+    const spotId = Number(body.spotId);
+    const spot = getSpot(spotId);
+    if (!spot) {
+      return NextResponse.json({ error: "Unknown spot." }, { status: 400 });
+    }
+
+    const brandName = String(body.brandName ?? "").trim();
+    const handle = normalizeHandle(String(body.handle ?? ""));
+    const website = String(body.website ?? "").trim();
+    const logoUrl = String(body.logoUrl ?? "").trim();
+    const amount = Number(body.amount);
+
+    if (brandName.length < 2) {
+      return NextResponse.json(
+        { error: "Brand name must be at least 2 characters." },
         { status: 400 },
       );
     }
-  }
+    if (handle.length < 2) {
+      return NextResponse.json(
+        { error: "Add your X handle so I can reach you." },
+        { status: 400 },
+      );
+    }
+    if (website && !/^https?:\/\//i.test(website)) {
+      return NextResponse.json(
+        { error: "Website must start with http:// or https://." },
+        { status: 400 },
+      );
+    }
+    if (logoUrl) {
+      const ok =
+        logoUrl.startsWith("/logos/") ||
+        logoUrl.startsWith("data:image/") ||
+        /^https?:\/\//i.test(logoUrl);
+      if (!ok) {
+        return NextResponse.json(
+          { error: "Logo must be an http(s) URL or an uploaded /logos/ path." },
+          { status: 400 },
+        );
+      }
+    }
 
-  const outcome = await withAuctionLock(async (file) => {
-    const locked = file.lockedSpotIds ?? [];
-    const err = validateNewBidAmount(file.bids, spotId, amount, locked);
-    if (err) return { error: err };
+    const outcome = await withAuctionLock(async (file) => {
+      const locked = file.lockedSpotIds ?? [];
+      const err = validateNewBidAmount(file.bids, spotId, amount, locked);
+      if (err) return { error: err };
 
-    const now = new Date().toISOString();
-    const bid: Bid = {
-      id: newBidId(),
-      spotId,
-      brandName,
-      handle,
-      website,
-      logoUrl,
-      amount,
-      deposit: calcDeposit(amount),
-      status: "pending",
-      createdAt: now,
-      updatedAt: now,
-    };
-    return {
-      result: bid,
-      file: { ...file, bids: [...file.bids, bid] },
-    };
-  });
+      const now = new Date().toISOString();
+      const bid: Bid = {
+        id: newBidId(),
+        spotId,
+        brandName,
+        handle,
+        website,
+        logoUrl,
+        amount,
+        deposit: calcDeposit(amount),
+        status: "pending",
+        createdAt: now,
+        updatedAt: now,
+      };
+      return {
+        result: bid,
+        file: { ...file, bids: [...file.bids, bid] },
+      };
+    });
 
-  if ("error" in outcome) {
-    return NextResponse.json({ error: outcome.error }, { status: 400 });
-  }
+    if ("error" in outcome) {
+      return NextResponse.json({ error: outcome.error }, { status: 400 });
+    }
 
-  const file = await readAuctionFile();
-  const board = buildPublicBoard(file.bids, file.lockedSpotIds ?? []);
+    const file = await readAuctionFile();
+    const board = buildPublicBoard(file.bids, file.lockedSpotIds ?? []);
 
-  return NextResponse.json({
-    ok: true,
-    bid: outcome.result,
-    board,
-    message:
-      "Bid is live on the board. Pay to lock only if you are the current leader on this spot.",
-  });
+    return NextResponse.json({
+      ok: true,
+      bid: outcome.result,
+      board,
+      message:
+        "Bid is live on the board. Pay to lock only if you are the current leader on this spot.",
+    });
   } catch (err) {
-    // #region agent log
-    fetch("http://127.0.0.1:7681/ingest/d8bbfca4-00dd-492f-ae23-8c4a307aedad", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Debug-Session-Id": "c3e306",
-      },
-      body: JSON.stringify({
-        sessionId: "c3e306",
-        runId: "outbid-network",
-        hypothesisId: "B",
-        location: "api/bids/route.ts:POST:catch",
-        message: "POST /api/bids unhandled error",
-        data: {
-          err: err instanceof Error ? err.message : String(err),
-        },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
-    return NextResponse.json(
-      { error: "Could not save bid. Try again." },
-      { status: 500 },
-    );
+    const message =
+      err instanceof Error ? err.message : "Could not save bid. Try again.";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

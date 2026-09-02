@@ -24,6 +24,10 @@ function hasBlobToken(): boolean {
   return Boolean(process.env.BLOB_READ_WRITE_TOKEN?.trim());
 }
 
+function isVercel(): boolean {
+  return Boolean(process.env.VERCEL);
+}
+
 async function readLocal(): Promise<BidsFile> {
   try {
     const raw = await fs.readFile(LOCAL_PATH, "utf8");
@@ -89,90 +93,16 @@ export async function readBids(): Promise<Bid[]> {
 
 export async function writeAuctionFile(data: BidsFile): Promise<void> {
   const normalized = normalizeFile(data);
-  const useBlob = hasBlobToken();
-  // #region agent log
-  fetch("http://127.0.0.1:7681/ingest/d8bbfca4-00dd-492f-ae23-8c4a307aedad", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Debug-Session-Id": "c3e306",
-    },
-    body: JSON.stringify({
-      sessionId: "c3e306",
-      runId: "outbid-network",
-      hypothesisId: "A",
-      location: "store.ts:writeAuctionFile:start",
-      message: "write auction file",
-      data: { useBlob, bidCount: normalized.bids.length },
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {});
-  // #endregion
-  try {
-    await writeLocal(normalized);
-    // #region agent log
-    fetch("http://127.0.0.1:7681/ingest/d8bbfca4-00dd-492f-ae23-8c4a307aedad", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Debug-Session-Id": "c3e306",
-      },
-      body: JSON.stringify({
-        sessionId: "c3e306",
-        runId: "outbid-network",
-        hypothesisId: "A",
-        location: "store.ts:writeAuctionFile:local-ok",
-        message: "writeLocal ok",
-        data: {},
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
-    if (useBlob) {
-      await writeBlob(normalized);
-      // #region agent log
-      fetch("http://127.0.0.1:7681/ingest/d8bbfca4-00dd-492f-ae23-8c4a307aedad", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Debug-Session-Id": "c3e306",
-        },
-        body: JSON.stringify({
-          sessionId: "c3e306",
-          runId: "outbid-network",
-          hypothesisId: "B",
-          location: "store.ts:writeAuctionFile:blob-ok",
-          message: "writeBlob ok",
-          data: {},
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
-    }
-  } catch (err) {
-    // #region agent log
-    fetch("http://127.0.0.1:7681/ingest/d8bbfca4-00dd-492f-ae23-8c4a307aedad", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Debug-Session-Id": "c3e306",
-      },
-      body: JSON.stringify({
-        sessionId: "c3e306",
-        runId: "outbid-network",
-        hypothesisId: "A",
-        location: "store.ts:writeAuctionFile:fail",
-        message: "write auction file failed",
-        data: {
-          useBlob,
-          err: err instanceof Error ? err.message : String(err),
-        },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
-    throw err;
+  if (hasBlobToken()) {
+    await writeBlob(normalized);
+    return;
   }
+  if (isVercel()) {
+    throw new Error(
+      "Bid storage is not configured. In Vercel, create a Blob store and connect it to this project (sets BLOB_READ_WRITE_TOKEN).",
+    );
+  }
+  await writeLocal(normalized);
 }
 
 export async function writeBids(bids: Bid[]): Promise<void> {
