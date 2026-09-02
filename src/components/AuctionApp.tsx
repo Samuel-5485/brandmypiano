@@ -193,13 +193,23 @@ export function AuctionApp({ initialBoard }: Props) {
 
         <section className="mx-auto max-w-5xl px-4 py-12 sm:px-6">
           <h2 className="font-display text-3xl text-cream">Who you are backing</h2>
-          <div className="mt-6 max-w-2xl space-y-4 text-base leading-relaxed text-dim">
-            {CONFIG.story.split("\n\n").map((para) => (
-              <p key={para.slice(0, 24)}>{para}</p>
-            ))}
-            <p>
-              — {CONFIG.name} · {CONFIG.handle} · {CONFIG.timezoneNote}
-            </p>
+          <div className="mt-6 flex max-w-2xl flex-col gap-6 sm:flex-row sm:items-start">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={CONFIG.photo}
+              alt={CONFIG.name}
+              width={96}
+              height={96}
+              className="h-24 w-24 shrink-0 rounded-full object-cover"
+            />
+            <div className="space-y-4 text-base leading-relaxed text-dim">
+              {CONFIG.story.split("\n\n").map((para) => (
+                <p key={para.slice(0, 24)}>{para}</p>
+              ))}
+              <p>
+                — {CONFIG.name} · {CONFIG.handle} · {CONFIG.location}
+              </p>
+            </div>
           </div>
         </section>
 
@@ -259,7 +269,7 @@ export function AuctionApp({ initialBoard }: Props) {
             >
               {CONFIG.handle}
             </a>{" "}
-            · {CONFIG.timezoneNote}
+            · {CONFIG.location}
           </p>
           <p className="mt-3 text-sm text-dim">
             Not affiliated with Yamaha. No ROI, impression, or church-mention

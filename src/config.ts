@@ -11,9 +11,11 @@ export type PartConfig = {
 };
 
 export const CONFIG = {
-  name: "YOUR NAME",
-  handle: "@YOURHANDLE",
-  xProfile: "https://x.com/YOURHANDLE",
+  name: "Samuel Diriba",
+  handle: "@sami_diriba",
+  xProfile: "https://x.com/sami_diriba",
+  photo: "/samuel.jpg",
+  location: "East Africa (EAT, UTC+3)",
   paymentLink: "",
   goal: 1000,
   /** ISO string. Auction ends at this moment. Edit before launch. */
@@ -21,7 +23,6 @@ export const CONFIG = {
   minRaise: 5,
   depositPct: 0.2,
   minDeposit: 5,
-  timezoneNote: "East Africa (EAT, UTC+3)",
   siteName: "Brand My Piano",
   domainText: "Brand My Piano",
   headline: "Your brand, on my piano.",
