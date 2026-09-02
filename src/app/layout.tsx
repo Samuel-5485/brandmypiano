@@ -39,7 +39,7 @@ export const metadata: Metadata = {
   },
 };
 
-const themeInitScript = `(function(){try{var k='brandmypiano-theme';var p=localStorage.getItem(k);if(p!=='default'&&p!=='dark'&&p!=='light'&&p!=='system')p='default';var t=p;if(p==='system'){t=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}var r=document.documentElement;r.setAttribute('data-theme',t);r.setAttribute('data-theme-preference',p);}catch(e){document.documentElement.setAttribute('data-theme','default');document.documentElement.setAttribute('data-theme-preference','default');}})();`;
+const themeInitScript = `(function(){try{var k='brandmypiano-theme';var p=localStorage.getItem(k);if(p!=='default'&&p!=='dark'&&p!=='light')p='default';if(p==='system')p='default';var r=document.documentElement;r.setAttribute('data-theme',p);r.setAttribute('data-theme-preference',p);}catch(e){document.documentElement.setAttribute('data-theme','default');document.documentElement.setAttribute('data-theme-preference','default');}})();`;
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (

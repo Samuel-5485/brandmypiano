@@ -12,7 +12,6 @@ const OPTIONS: { value: ThemePreference; label: string }[] = [
   { value: "default", label: "Default" },
   { value: "dark", label: "Dark" },
   { value: "light", label: "Light" },
-  { value: "system", label: "System" },
 ];
 
 export function ThemeSwitcher() {
@@ -23,18 +22,14 @@ export function ThemeSwitcher() {
 
   useEffect(() => {
     const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
-    const next = isThemePreference(stored) ? stored : "default";
+    const raw = isThemePreference(stored) ? stored : "default";
+    const next: ThemePreference = raw === "system" ? "default" : raw;
     setPreference(next);
     applyTheme(next);
+    if (raw === "system") {
+      window.localStorage.setItem(THEME_STORAGE_KEY, "default");
+    }
   }, []);
-
-  useEffect(() => {
-    if (preference !== "system") return;
-    const mq = window.matchMedia("(prefers-color-scheme: dark)");
-    const onChange = () => applyTheme("system");
-    mq.addEventListener("change", onChange);
-    return () => mq.removeEventListener("change", onChange);
-  }, [preference]);
 
   useEffect(() => {
     if (!menuOpen) return;

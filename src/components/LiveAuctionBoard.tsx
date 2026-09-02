@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { CONFIG } from "@/config";
 import {
   formatTimeAgo,
@@ -214,6 +214,17 @@ function ThisSpotPanel({
   viewerHandle: string;
   onBid: (prefillAmount: number) => void;
 }) {
+  const viewerRowRef = useRef<HTMLLIElement>(null);
+  const rest = spot?.offers.slice(1) ?? [];
+  const viewerOffer = rest.find(
+    (o) => viewerHandle.length > 1 && o.handle === viewerHandle,
+  );
+
+  useEffect(() => {
+    if (!spot || !viewerOffer || !viewerRowRef.current) return;
+    viewerRowRef.current.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [spot?.spotId, viewerOffer?.id, spot, viewerOffer]);
+
   if (!spot) {
     return (
       <aside className="card-surface rounded-xl p-5 lg:sticky lg:top-24">
@@ -229,37 +240,68 @@ function ThisSpotPanel({
   const disabled = ended || spot.locked;
   const leader = spot.offers[0] ?? null;
 
+  const raceSummary =
+    rest.length === 0
+      ? null
+      : rest.length === 1
+        ? `2nd · 1 more in this race`
+        : `2nd–${ordinalRank(rest[rest.length - 1].rank)} · ${rest.length} more in this race`;
+
   return (
-    <aside className="card-surface rounded-xl p-5 lg:sticky lg:top-24">
-      <p className="text-xs uppercase tracking-[0.16em] text-gold">
-        Spot {spot.spotId}
-      </p>
-      <h3 className="font-display text-xl text-cream">This spot</h3>
-      <p className="mt-1 text-sm text-dim">{spot.name}</p>
-      {spot.locked && (
-        <p className="mt-2 text-xs uppercase tracking-wide text-dim">Locked</p>
-      )}
+    <aside className="card-surface flex max-h-[calc(100vh-6rem)] flex-col rounded-xl p-5 lg:sticky lg:top-24">
+      <div className="shrink-0">
+        <p className="text-xs uppercase tracking-[0.16em] text-gold">
+          Spot {spot.spotId}
+        </p>
+        <h3 className="font-display text-xl text-cream">This spot</h3>
+        <p className="mt-1 text-sm text-dim">{spot.name}</p>
+        {spot.locked && (
+          <p className="mt-2 text-xs uppercase tracking-wide text-dim">Locked</p>
+        )}
+      </div>
 
       {spot.offers.length === 0 ? (
-        <p className="mt-4 text-sm text-dim">
+        <p className="mt-4 shrink-0 text-sm text-dim">
           No bids yet. Min opening bid {money(spot.startingBid)}.
         </p>
       ) : (
-        <ul className="mt-4 space-y-2">
-          {spot.offers.map((offer) => (
+        <div className="mt-4 min-h-0 shrink-0">
+          {leader && (
             <OfferRow
-              key={offer.id}
-              offer={offer}
+              offer={leader}
               spot={spot}
-              isViewer={
-                viewerHandle.length > 1 && offer.handle === viewerHandle
-              }
+              isViewer={viewerHandle.length > 1 && leader.handle === viewerHandle}
               ended={ended}
               disabled={disabled}
               onBeat={() => onBid(spot.minNextBid)}
             />
-          ))}
-        </ul>
+          )}
+          {rest.length > 0 && (
+            <>
+              <ul className="spot-ladder-scroll mt-2 space-y-2">
+                {rest.map((offer) => {
+                  const isViewer =
+                    viewerHandle.length > 1 && offer.handle === viewerHandle;
+                  return (
+                    <OfferRow
+                      key={offer.id}
+                      offer={offer}
+                      spot={spot}
+                      isViewer={isViewer}
+                      ended={ended}
+                      disabled={disabled}
+                      onBeat={() => onBid(spot.minNextBid)}
+                      rowRef={isViewer ? viewerRowRef : undefined}
+                    />
+                  );
+                })}
+              </ul>
+              {raceSummary && (
+                <p className="mt-2 text-xs text-dim">{raceSummary}</p>
+              )}
+            </>
+          )}
+        </div>
       )}
 
       {!spot.offers.length && !disabled && (
@@ -277,14 +319,14 @@ function ThisSpotPanel({
         <button
           type="button"
           onClick={() => onBid(spot.minNextBid)}
-          className="focus-ring mt-4 w-full rounded-md px-4 py-2.5 text-sm font-medium transition hover:opacity-90"
+          className="focus-ring mt-4 w-full shrink-0 rounded-md px-4 py-2.5 text-sm font-medium transition hover:opacity-90"
           style={{ background: "var(--button-bg)", color: "var(--button-text)" }}
         >
           {spot.hasBid ? "Outbid" : "Bid"} · {money(spot.minNextBid)} min
         </button>
       )}
 
-      <p className="mt-4 text-xs leading-relaxed text-dim">
+      <p className="mt-4 shrink-0 text-xs leading-relaxed text-dim">
         Only 1st place goes on this part of the keyboard. 2nd and 3rd stay in the
         race until someone locks.
       </p>
@@ -299,6 +341,7 @@ function OfferRow({
   ended,
   disabled,
   onBeat,
+  rowRef,
 }: {
   offer: SpotOffer;
   spot: SpotPublicState;
@@ -306,6 +349,7 @@ function OfferRow({
   ended: boolean;
   disabled: boolean;
   onBeat: () => void;
+  rowRef?: React.RefObject<HTMLLIElement | null>;
 }) {
   const isLeader = offer.rank === 1;
   const rankLabel = isLeader ? "1st" : ordinalRank(offer.rank);
@@ -314,16 +358,19 @@ function OfferRow({
 
   return (
     <li
+      ref={rowRef}
       className={`rounded-lg border px-3 py-3 ${
         isLeader
           ? "border-gold/50 bg-gold/10"
-          : "border-line bg-bg/30"
+          : isViewer
+            ? "border-gold/30 bg-gold/5"
+            : "border-line bg-bg/30"
       }`}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
           <p className="text-xs font-medium uppercase tracking-wide text-gold">
-            {isViewer ? `You · ${rankLabel}` : rankLabel}
+            {isViewer ? `YOU · ${rankLabel}` : rankLabel}
           </p>
           <div className="mt-1.5 flex items-center gap-2.5">
             <span

@@ -128,3 +128,29 @@ body {
   outline: 2px solid var(--gold);
   outline-offset: 2px;
 }
+
+.spot-ladder-scroll {
+  max-height: 260px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scroll-behavior: smooth;
+  scrollbar-color: var(--gold) transparent;
+  scrollbar-width: thin;
+}
+
+.spot-ladder-scroll::-webkit-scrollbar {
+  width: 5px;
+}
+
+.spot-ladder-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.spot-ladder-scroll::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--gold) 75%, transparent);
+  border-radius: 999px;
+}
+
+.spot-ladder-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--gold);
+}
