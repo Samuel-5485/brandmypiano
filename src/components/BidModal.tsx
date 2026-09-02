@@ -161,20 +161,102 @@ export function BidModal({
     }
     setBusy(true);
     setError("");
+    const payload = {
+      spotId: spot!.spotId,
+      brandName,
+      handle: normalizedHandle,
+      website,
+      logoUrl: logoUrl.trim(),
+      amount: Number(amount),
+    };
+    // #region agent log
+    fetch("http://127.0.0.1:7681/ingest/d8bbfca4-00dd-492f-ae23-8c4a307aedad", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Debug-Session-Id": "c3e306",
+      },
+      body: JSON.stringify({
+        sessionId: "c3e306",
+        runId: "outbid-network",
+        hypothesisId: "D",
+        location: "BidModal.tsx:submit:start",
+        message: "bid submit started",
+        data: {
+          spotId: payload.spotId,
+          amount: payload.amount,
+          amountIsFinite: Number.isFinite(payload.amount),
+          logoUrlLen: payload.logoUrl.length,
+          brandLen: payload.brandName.length,
+          handleLen: payload.handle.length,
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
     try {
       const res = await fetch("/api/bids", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          spotId: spot!.spotId,
-          brandName,
-          handle: normalizedHandle,
-          website,
-          logoUrl: logoUrl.trim(),
-          amount: Number(amount),
-        }),
+        body: JSON.stringify(payload),
       });
-      const data = await res.json();
+      const raw = await res.text();
+      // #region agent log
+      fetch("http://127.0.0.1:7681/ingest/d8bbfca4-00dd-492f-ae23-8c4a307aedad", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Debug-Session-Id": "c3e306",
+        },
+        body: JSON.stringify({
+          sessionId: "c3e306",
+          runId: "outbid-network",
+          hypothesisId: "C",
+          location: "BidModal.tsx:submit:response",
+          message: "bid submit response",
+          data: {
+            ok: res.ok,
+            status: res.status,
+            contentType: res.headers.get("content-type"),
+            bodyLen: raw.length,
+            bodyPreview: raw.slice(0, 200),
+          },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
+      let data: {
+        error?: string;
+        bid?: { spotId: number; amount: number; brandName: string };
+        board?: { spots?: SpotPublicState[] };
+      };
+      try {
+        data = JSON.parse(raw) as typeof data;
+      } catch (parseErr) {
+        // #region agent log
+        fetch("http://127.0.0.1:7681/ingest/d8bbfca4-00dd-492f-ae23-8c4a307aedad", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Debug-Session-Id": "c3e306",
+          },
+          body: JSON.stringify({
+            sessionId: "c3e306",
+            runId: "outbid-network",
+            hypothesisId: "C",
+            location: "BidModal.tsx:submit:json-parse-fail",
+            message: "response JSON parse failed",
+            data: {
+              status: res.status,
+              parseErr:
+                parseErr instanceof Error ? parseErr.message : String(parseErr),
+            },
+            timestamp: Date.now(),
+          }),
+        }).catch(() => {});
+        // #endregion
+        throw parseErr;
+      }
       if (!res.ok) {
         setError(data.error || "Could not save bid.");
         setBusy(false);
@@ -195,7 +277,27 @@ export function BidModal({
         isLeader: leader?.holderHandle === normalizedHandle,
       });
       onSubmitted();
-    } catch {
+    } catch (err) {
+      // #region agent log
+      fetch("http://127.0.0.1:7681/ingest/d8bbfca4-00dd-492f-ae23-8c4a307aedad", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Debug-Session-Id": "c3e306",
+        },
+        body: JSON.stringify({
+          sessionId: "c3e306",
+          runId: "outbid-network",
+          hypothesisId: "C",
+          location: "BidModal.tsx:submit:catch",
+          message: "bid submit catch",
+          data: {
+            err: err instanceof Error ? err.message : String(err),
+          },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
       setError("Network error. Try again.");
     } finally {
       setBusy(false);

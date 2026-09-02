@@ -21,6 +21,25 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  // #region agent log
+  fetch("http://127.0.0.1:7681/ingest/d8bbfca4-00dd-492f-ae23-8c4a307aedad", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Debug-Session-Id": "c3e306",
+    },
+    body: JSON.stringify({
+      sessionId: "c3e306",
+      runId: "outbid-network",
+      hypothesisId: "B",
+      location: "api/bids/route.ts:POST:entry",
+      message: "POST /api/bids entry",
+      data: { hasBlobToken: Boolean(process.env.BLOB_READ_WRITE_TOKEN?.trim()) },
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {});
+  // #endregion
+  try {
   if (auctionEnded()) {
     return NextResponse.json(
       { error: "The auction has ended. No new bids are accepted." },
@@ -125,4 +144,30 @@ export async function POST(request: Request) {
     message:
       "Bid is live on the board. Pay to lock only if you are the current leader on this spot.",
   });
+  } catch (err) {
+    // #region agent log
+    fetch("http://127.0.0.1:7681/ingest/d8bbfca4-00dd-492f-ae23-8c4a307aedad", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Debug-Session-Id": "c3e306",
+      },
+      body: JSON.stringify({
+        sessionId: "c3e306",
+        runId: "outbid-network",
+        hypothesisId: "B",
+        location: "api/bids/route.ts:POST:catch",
+        message: "POST /api/bids unhandled error",
+        data: {
+          err: err instanceof Error ? err.message : String(err),
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
+    return NextResponse.json(
+      { error: "Could not save bid. Try again." },
+      { status: 500 },
+    );
+  }
 }
