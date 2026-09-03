@@ -1,4 +1,4 @@
-import { CONFIG, getPaymentLink, getSpot } from "@/config";
+import { CONFIG, getAuctionEnd, getPaymentLink, getSpot } from "@/config";
 import type {
   Bid,
   PublicBidHistoryEntry,
@@ -8,7 +8,7 @@ import type {
 } from "@/lib/types";
 
 export function auctionEnded(now = new Date()): boolean {
-  return now.getTime() >= new Date(CONFIG.auctionEnd).getTime();
+  return now.getTime() >= new Date(getAuctionEnd()).getTime();
 }
 
 export function calcDeposit(amount: number): number {
@@ -295,7 +295,7 @@ export function buildPublicBoard(
     goal: CONFIG.goal,
     percent,
     spotsWithBid,
-    auctionEnd: CONFIG.auctionEnd,
+    auctionEnd: getAuctionEnd(),
     ended: auctionEnded(),
     paymentLink: getPaymentLink(),
     spots,

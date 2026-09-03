@@ -40,7 +40,7 @@ export function Countdown({ endsAt }: { endsAt: string }) {
   return (
     <div aria-live="polite">
       <p className="mb-2 text-xs uppercase tracking-[0.18em] text-dim">
-        {ended ? "Auction ended" : "Time left"}
+        {ended ? "Auction ended — locking winners." : "Time left"}
       </p>
       <div className="grid grid-cols-4 gap-2">
         {parts.map((part) => (

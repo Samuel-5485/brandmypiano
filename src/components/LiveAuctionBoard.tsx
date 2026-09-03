@@ -103,6 +103,11 @@ export function LiveAuctionBoard({
 
       {tab === "spots" ? (
         <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_min(22rem,36%)] lg:items-start">
+          {board.ended && (
+            <p className="col-span-full rounded-lg border border-line bg-card px-4 py-3 text-sm text-dim lg:col-span-2">
+              Auction ended — locking winners.
+            </p>
+          )}
           <div className="overflow-x-auto rounded-xl border border-line">
             <table className="w-full min-w-[560px] text-left text-sm">
               <thead className="bg-card text-dim">
@@ -508,18 +513,24 @@ function SpotRow({
       </td>
       <td className="px-4 py-3 tabular-nums text-dim">{spot.bidCount}</td>
       <td className="px-4 py-3 text-right">
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onBid();
-          }}
-          disabled={disabled}
-          className="focus-ring rounded-md px-3 py-2 text-sm font-medium transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-          style={{ background: "var(--button-bg)", color: "var(--button-text)" }}
-        >
-          {spot.locked ? "Locked" : hasLeader ? "Outbid" : "Bid"}
-        </button>
+        {ended && spot.locked ? (
+          <span className="text-xs leading-snug text-dim">
+            Auction ended — locking winners.
+          </span>
+        ) : ended ? null : (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onBid();
+            }}
+            disabled={disabled}
+            className="focus-ring rounded-md px-3 py-2 text-sm font-medium transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+            style={{ background: "var(--button-bg)", color: "var(--button-text)" }}
+          >
+            {spot.locked ? "Locked" : hasLeader ? "Outbid" : "Bid"}
+          </button>
+        )}
       </td>
     </tr>
   );

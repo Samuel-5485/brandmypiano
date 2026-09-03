@@ -150,6 +150,23 @@ export default function AdminPage() {
           )}
         </div>
         <div className="flex gap-2">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => {
+              if (
+                !window.confirm(
+                  "Delete all test/debug/seed bids from storage? Real bids are kept.",
+                )
+              ) {
+                return;
+              }
+              act({ action: "purge_test_bids" });
+            }}
+            className="focus-ring rounded-md border border-line px-3 py-2 text-sm text-dim hover:border-gold hover:text-cream"
+          >
+            Purge test bids
+          </button>
           <a
             href="/api/admin/bids?format=csv"
             className="focus-ring rounded-md border border-line px-3 py-2 text-sm text-cream hover:border-gold"

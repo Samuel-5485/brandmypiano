@@ -18,8 +18,9 @@ export const CONFIG = {
   location: "East Africa (EAT, UTC+3)",
   paymentLink: "",
   goal: 1000,
-  /** ISO string. Auction ends at this moment. Edit before launch. */
-  auctionEnd: "2026-09-12T20:00:00+03:00",
+  /** First public launch (EAT). Do not change after you announce the auction. */
+  auctionLaunch: "2026-09-02T20:00:00+03:00",
+  auctionDurationDays: 14,
   minRaise: 5,
   depositPct: 0.2,
   minDeposit: 5,
@@ -81,4 +82,11 @@ export function getPaymentLink(): string {
 
 export function getSpot(id: number): SpotConfig | undefined {
   return CONFIG.spots.find((spot) => spot.id === id);
+}
+
+/** Fixed end = auctionLaunch + auctionDurationDays (never recalculated from “now”). */
+export function getAuctionEnd(): string {
+  const launch = new Date(CONFIG.auctionLaunch);
+  const endMs = launch.getTime() + CONFIG.auctionDurationDays * 86_400_000;
+  return new Date(endMs).toISOString();
 }
