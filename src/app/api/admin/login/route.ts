@@ -5,32 +5,47 @@ import {
   checkPassword,
   createAdminToken,
 } from "@/lib/auth";
+import { isRateLimited, recordFailedAttempt, clientIp } from "@/lib/rateLimit";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+const MAX_ATTEMPTS = 5;
+const WINDOW_MS = 15 * 60 * 1000;
+
+function deny() {
+  return NextResponse.json({ ok: false }, { status: 401 });
+}
+
 export async function POST(request: Request) {
-  if (!adminConfigured()) {
-    return NextResponse.json(
-      { error: "Set ADMIN_PASSWORD in your environment first." },
-      { status: 500 },
-    );
+  const ip = clientIp(request);
+  const rlKey = `admin-login:${ip}`;
+  if (isRateLimited(rlKey, MAX_ATTEMPTS, WINDOW_MS)) {
+    return deny();
   }
 
-  let body: { password?: string };
+  if (!adminConfigured()) {
+    recordFailedAttempt(rlKey, MAX_ATTEMPTS, WINDOW_MS);
+    return deny();
+  }
+
+  let body: { key?: string; password?: string };
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
+    recordFailedAttempt(rlKey, MAX_ATTEMPTS, WINDOW_MS);
+    return deny();
   }
 
-  if (!checkPassword(String(body.password ?? ""))) {
-    return NextResponse.json({ error: "Wrong password." }, { status: 401 });
+  const candidate = String(body.key ?? body.password ?? "");
+  if (!checkPassword(candidate)) {
+    recordFailedAttempt(rlKey, MAX_ATTEMPTS, WINDOW_MS);
+    return deny();
   }
 
   const token = await createAdminToken();
   if (!token) {
-    return NextResponse.json({ error: "Could not create session." }, { status: 500 });
+    return deny();
   }
 
   const res = NextResponse.json({ ok: true });

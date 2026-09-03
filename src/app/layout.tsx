@@ -25,6 +25,10 @@ export const metadata: Metadata = {
     template: `%s · ${CONFIG.siteName}`,
   },
   description: CONFIG.heroLede,
+  icons: {
+    icon: "/favicon.svg",
+    apple: "/apple-touch-icon.png",
+  },
   openGraph: {
     title: `${CONFIG.siteName} — ${CONFIG.headline}`,
     description: CONFIG.heroLede,

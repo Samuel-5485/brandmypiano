@@ -14,9 +14,9 @@ type AdminPayload = {
 };
 
 export default function AdminPage() {
-  const [password, setPassword] = useState("");
+  const [key, setKey] = useState("");
   const [authed, setAuthed] = useState(false);
-  const [error, setError] = useState("");
+  const [toolError, setToolError] = useState("");
   const [data, setData] = useState<AdminPayload | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -38,7 +38,6 @@ export default function AdminPage() {
       return;
     }
     if (!res.ok) {
-      setError("Could not load bids.");
       return;
     }
     const json = (await res.json()) as AdminPayload;
@@ -53,23 +52,21 @@ export default function AdminPage() {
   async function login(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
-    setError("");
     try {
       const res = await fetch("/api/admin/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password }),
+        body: JSON.stringify({ key }),
       });
-      const json = await res.json();
       if (!res.ok) {
-        setError(json.error || "Login failed.");
+        setKey("");
         setBusy(false);
         return;
       }
       setAuthed(true);
       await load();
     } catch {
-      setError("Network error.");
+      /* stay on blank screen */
     } finally {
       setBusy(false);
     }
@@ -83,7 +80,7 @@ export default function AdminPage() {
 
   async function act(body: Record<string, unknown>) {
     setBusy(true);
-    setError("");
+    setToolError("");
     try {
       const res = await fetch("/api/admin/bids", {
         method: "POST",
@@ -92,12 +89,12 @@ export default function AdminPage() {
       });
       const json = await res.json();
       if (!res.ok) {
-        setError(json.error || "Action failed.");
+        setToolError(json.error || "Action failed.");
       } else {
         await load();
       }
     } catch {
-      setError("Network error.");
+      setToolError("Network error.");
     } finally {
       setBusy(false);
     }
@@ -105,29 +102,20 @@ export default function AdminPage() {
 
   if (!authed) {
     return (
-      <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-4">
-        <h1 className="font-display text-3xl text-cream">Admin</h1>
-        <p className="mt-2 text-sm text-dim">
-          Password from <code className="text-gold">ADMIN_PASSWORD</code>.
-        </p>
-        <form onSubmit={login} className="mt-6 space-y-4">
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="focus-ring w-full rounded-md border border-line bg-card px-3 py-3 text-cream"
-            placeholder="Password"
-            autoComplete="current-password"
-          />
-          {error && <p className="text-sm text-red-300">{error}</p>}
-          <button
-            type="submit"
-            disabled={busy}
-            className="focus-ring w-full rounded-md px-4 py-3 font-medium transition hover:opacity-90"
-            style={{ background: "var(--button-bg)", color: "var(--button-text)" }}
-          >
-            {busy ? "…" : "Enter"}
-          </button>
+      <main className="flex min-h-screen items-center justify-center bg-bg px-4">
+        <form onSubmit={login} className="w-full max-w-[14rem]">
+          <label className="block text-sm text-dim">
+            Key
+            <input
+              type="password"
+              value={key}
+              onChange={(e) => setKey(e.target.value)}
+              disabled={busy}
+              autoComplete="off"
+              className="focus-ring mt-1.5 w-full border border-line bg-transparent px-2 py-2 text-cream outline-none"
+            />
+          </label>
+          <p className="mt-4 text-xs text-dim">Nothing here.</p>
         </form>
       </main>
     );
@@ -183,7 +171,7 @@ export default function AdminPage() {
         </div>
       </div>
 
-      {error && <p className="mt-4 text-sm text-red-300">{error}</p>}
+      {toolError && <p className="mt-4 text-sm text-red-300">{toolError}</p>}
 
       <section className="mt-8">
         <h2 className="font-display text-xl text-cream">Manually add a bid</h2>

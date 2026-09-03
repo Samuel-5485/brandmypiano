@@ -382,26 +382,6 @@ export async function POST(request: Request) {
     const outcome = await withAuctionLock(async (file) => {
       const removed = file.bids.filter((b) => isTestBid(b));
       const kept = file.bids.filter((b) => !isTestBid(b));
-      // #region agent log
-      fetch("http://127.0.0.1:7681/ingest/d8bbfca4-00dd-492f-ae23-8c4a307aedad", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "c3e306" },
-        body: JSON.stringify({
-          sessionId: "c3e306",
-          hypothesisId: "purge",
-          location: "admin/bids/route.ts:purge_test_bids",
-          message: "purge_test_bids completed",
-          data: {
-            removedCount: removed.length,
-            keptCount: kept.length,
-            removedBrands: removed.map((b) => b.brandName),
-            spot9Bids: kept.filter((b) => b.spotId === 9).length,
-            spot10Bids: kept.filter((b) => b.spotId === 10).length,
-          },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
       return {
         result: { removed: removed.length, kept: kept.length },
         file: { ...file, bids: kept },
