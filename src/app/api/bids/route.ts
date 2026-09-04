@@ -111,8 +111,16 @@ export async function POST(request: Request) {
       return apiError("Website must start with http:// or https://.", 400);
     }
 
+    const logoUrlInput = String(body.logoUrl ?? "").trim();
+    if (logoUrlInput.startsWith("data:")) {
+      return apiError(
+        "Logo URL cannot be base64 data. Use Choose file or an https:// URL.",
+        400,
+      );
+    }
+
     const logo = await resolveLogoForBid({
-      logoUrl: String(body.logoUrl ?? "").trim(),
+      logoUrl: logoUrlInput,
       file,
     });
 
@@ -165,16 +173,36 @@ export async function POST(request: Request) {
       return apiError(outcome.error, 400);
     }
 
-    const auctionFile = await readAuctionFile();
-    const board = buildPublicBoard(auctionFile.bids, auctionFile.lockedSpotIds ?? []);
-
-    return apiOk({
-      bid: outcome.result,
-      board,
-      message:
-        "Bid is live on the board. Pay to lock only if you are the current leader on this spot.",
+    const bid = outcome.result;
+    const payload = {
+      bid: {
+        id: bid.id,
+        spotId: bid.spotId,
+        brandName: bid.brandName,
+        handle: bid.handle,
+        amount: bid.amount,
+        logoUrl: bid.logoUrl ?? null,
+      },
       ...(logo.warning ? { warning: logo.warning } : {}),
-    });
+    };
+
+    // #region agent log
+    fetch("http://127.0.0.1:7681/ingest/d8bbfca4-00dd-492f-ae23-8c4a307aedad", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "c3e306" },
+      body: JSON.stringify({
+        sessionId: "c3e306",
+        runId: "bid-post",
+        hypothesisId: "H6",
+        location: "api/bids/route.ts:POST:success",
+        message: "bid saved slim response",
+        data: { bidId: bid.id, payloadBytes: JSON.stringify(payload).length },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
+
+    return apiOk(payload);
   } catch (err) {
     if (err instanceof BoardLoadError) {
       return apiError(err.message, 503);

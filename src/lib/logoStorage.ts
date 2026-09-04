@@ -95,18 +95,6 @@ export async function uploadLogoBuffer(
   }
 }
 
-function parseDataUrl(dataUrl: string): { buffer: Buffer; contentType: string } | null {
-  const match = /^data:(image\/[a-z+.-]+);base64,(.+)$/i.exec(dataUrl.trim());
-  if (!match) return null;
-  const contentType = match[1].toLowerCase();
-  if (!ALLOWED.has(contentType)) return null;
-  try {
-    const buffer = Buffer.from(match[2], "base64");
-    return { buffer, contentType };
-  } catch {
-    return null;
-  }
-}
 
 export async function resolveLogoForBid(input: {
   logoUrl?: string;
@@ -126,26 +114,12 @@ export async function resolveLogoForBid(input: {
     return { url: logoUrl };
   }
 
-  if (logoUrl.startsWith("data:image/")) {
-    if (logoUrl.length > MAX_LOGO_BYTES * 1.4) {
-      return {
-        url: null,
-        warning:
-          "Bid saved, logo failed: image data is too large for upload. Use a smaller file or https URL.",
-      };
-    }
-    const parsed = parseDataUrl(logoUrl);
-    if (!parsed) {
-      return { url: null, warning: "Bid saved, logo failed: invalid image data URL." };
-    }
-    const uploaded = await uploadLogoBuffer(parsed.buffer, parsed.contentType);
-    if (uploaded.ok) return { url: uploaded.url };
-    return { url: null, warning: `Bid saved, logo failed: ${uploaded.error}` };
-  }
-
   if (logoUrl.startsWith("/logos/")) {
     return { url: logoUrl };
   }
 
-  return { url: null, warning: "Bid saved, logo failed: logo must be https URL or an uploaded image." };
+  return {
+    url: null,
+    warning: "Bid saved, logo failed: logo must be an https URL or Choose file upload.",
+  };
 }

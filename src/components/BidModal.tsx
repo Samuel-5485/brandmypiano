@@ -118,34 +118,40 @@ export function BidModal({
     setError("");
   }
 
-  async function readJsonResponse(res: Response): Promise<{
-    ok?: boolean;
-    error?: string;
-    warning?: string;
-    bid?: { spotId: number; amount: number; brandName: string };
-    board?: { spots?: SpotPublicState[] };
-  } | null> {
-    const raw = await res.text();
-    if (!raw.trim()) {
-      setError("Server returned empty answer.");
-      return null;
-    }
+  async function bidVisibleOnBoard(
+    targetSpotId: number,
+    targetHandle: string,
+    targetAmount: number,
+  ): Promise<boolean> {
     try {
-      return JSON.parse(raw) as {
+      const boardRes = await fetch("/api/bids", { cache: "no-store" });
+      const boardText = await boardRes.text();
+      if (!boardText.trim()) return false;
+      const boardData = JSON.parse(boardText) as {
         ok?: boolean;
-        error?: string;
-        warning?: string;
-        bid?: { spotId: number; amount: number; brandName: string };
-        board?: { spots?: SpotPublicState[] };
+        spots?: SpotPublicState[];
       };
-    } catch {
-      setError(
-        res.ok
-          ? "Unexpected server response."
-          : `Could not save bid (HTTP ${res.status}).`,
+      const spots = boardData.spots;
+      if (!spots) return false;
+      const targetSpot = spots.find((s) => s.spotId === targetSpotId);
+      if (!targetSpot) return false;
+      return targetSpot.offers.some(
+        (o) =>
+          normalizeHandle(o.handle) === targetHandle && o.amount === targetAmount,
       );
-      return null;
+    } catch {
+      return false;
     }
+  }
+
+  async function finishSuccess() {
+    if (typeof window !== "undefined") {
+      localStorage.setItem(HANDLE_KEY, normalizedHandle);
+    }
+    setError("");
+    setWarning("");
+    await onSubmitted();
+    onClose();
   }
 
   async function submit(e: FormEvent) {
@@ -156,6 +162,11 @@ export function BidModal({
     }
     if (spot!.locked) {
       setError("This spot is locked.");
+      return;
+    }
+    const trimmedLogoUrl = logoUrl.trim();
+    if (trimmedLogoUrl.startsWith("data:")) {
+      setError("Use Choose file or an https:// URL — not a pasted base64 image.");
       return;
     }
     setBusy(true);
@@ -181,38 +192,83 @@ export function BidModal({
             brandName,
             handle: normalizedHandle,
             website,
-            logoUrl: logoUrl.trim(),
+            logoUrl: trimmedLogoUrl,
             amount: Number(amount),
           }),
         });
       }
 
-      const data = await readJsonResponse(res);
-      if (!data) return;
+      const text = await res.text();
+      const bidAmount = Number(amount);
+
+      if (!text.trim()) {
+        if (res.ok) {
+          const visible = await bidVisibleOnBoard(
+            spot!.spotId,
+            normalizedHandle,
+            bidAmount,
+          );
+          if (visible) {
+            await finishSuccess();
+            return;
+          }
+        }
+        setError(
+          res.ok
+            ? "Server returned empty answer."
+            : `Could not save bid (HTTP ${res.status}).`,
+        );
+        return;
+      }
+
+      let data: {
+        ok?: boolean;
+        error?: string;
+        warning?: string;
+        bid?: { spotId: number; amount: number; brandName: string };
+      };
+      try {
+        data = JSON.parse(text) as typeof data;
+      } catch {
+        if (res.ok) {
+          const visible = await bidVisibleOnBoard(
+            spot!.spotId,
+            normalizedHandle,
+            bidAmount,
+          );
+          if (visible) {
+            await finishSuccess();
+            return;
+          }
+        }
+        setError(
+          res.ok
+            ? "Unexpected server response."
+            : `Could not save bid (HTTP ${res.status}).`,
+        );
+        return;
+      }
+
       if (data.ok === false || !res.ok) {
         setError(data.error || "Could not save bid.");
         return;
       }
+
       if (!data.bid) {
+        const visible = await bidVisibleOnBoard(
+          spot!.spotId,
+          normalizedHandle,
+          bidAmount,
+        );
+        if (visible) {
+          await finishSuccess();
+          return;
+        }
         setError("Unexpected server response.");
         return;
       }
-      if (typeof window !== "undefined") {
-        localStorage.setItem(HANDLE_KEY, normalizedHandle);
-      }
-      const leader = data.board?.spots?.find(
-        (s: SpotPublicState) => s.spotId === data.bid!.spotId,
-      );
-      setDone({
-        amount: data.bid.amount,
-        spotId: data.bid.spotId,
-        brandName: data.bid.brandName,
-        isLeader: leader?.holderHandle === normalizedHandle,
-      });
-      if (data.warning) {
-        setWarning(data.warning);
-      }
-      onSubmitted();
+
+      await finishSuccess();
     } catch {
       setError("Network error. Try again.");
     } finally {
@@ -395,7 +451,13 @@ export function BidModal({
               <input
                 value={logoUrl}
                 onChange={(e) => {
-                  setLogoUrl(e.target.value);
+                  const next = e.target.value;
+                  if (next.trim().startsWith("data:")) {
+                    setError("Use Choose file or an https:// URL — not base64.");
+                    return;
+                  }
+                  setError("");
+                  setLogoUrl(next);
                   setLogoFile(null);
                   setLogoFileName("");
                 }}
