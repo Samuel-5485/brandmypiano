@@ -7,19 +7,22 @@ export type PlateQuadDef = {
   bl: Pt;
 };
 
-/** Cream-plate corners on public/e383-sticker.jpg (% of image). */
+/**
+ * Inner cream surface corners on public/e383-sticker.jpg (% of image).
+ * Inset from the black bezel so vinyl sits on cream only.
+ */
 export const STICKER_PLATE_QUADS: Record<1 | 2, PlateQuadDef> = {
   1: {
-    tl: { x: 14.2, y: 15.2 },
-    tr: { x: 69.8, y: 10.4 },
-    br: { x: 74.6, y: 47.8 },
-    bl: { x: 17.1, y: 55.6 },
+    tl: { x: 16.4, y: 17.2 },
+    tr: { x: 67.8, y: 12.0 },
+    br: { x: 71.8, y: 46.2 },
+    bl: { x: 18.6, y: 53.8 },
   },
   2: {
-    tl: { x: 36.2, y: 63.8 },
-    tr: { x: 64.8, y: 62.1 },
-    br: { x: 67.9, y: 72.4 },
-    bl: { x: 38.1, y: 74.2 },
+    tl: { x: 37.8, y: 64.6 },
+    tr: { x: 63.2, y: 63.2 },
+    br: { x: 66.2, y: 71.8 },
+    bl: { x: 39.4, y: 73.4 },
   },
 };
 
@@ -33,7 +36,15 @@ export function quadBounds(q: PlateQuadDef) {
   return { minX, minY, w: maxX - minX, h: maxY - minY };
 }
 
-/** Map unit square (0,0)-(1,0)-(1,1)-(0,1) → quad in 0–1 space. CSS matrix3d. */
+export function quadClipPath(q: PlateQuadDef): string {
+  const { tl, tr, br, bl } = q;
+  return `polygon(${tl.x}% ${tl.y}%, ${tr.x}% ${tr.y}%, ${br.x}% ${br.y}%, ${bl.x}% ${bl.y}%)`;
+}
+
+/**
+ * Map unit square → quad in 0–1 image space. For a layer sized to the full photo.
+ * Corner order: tl, tr, br, bl.
+ */
 export function squareToQuadMatrix3d(
   x0: number,
   y0: number,
@@ -72,22 +83,21 @@ export function squareToQuadMatrix3d(
   ].join(",")})`;
 }
 
-export function quadHomographyMatrix3d(
-  q: PlateQuadDef,
-  bounds = quadBounds(q),
-): string {
-  const n = (p: Pt) => ({
-    x: (p.x - bounds.minX) / bounds.w,
-    y: (p.y - bounds.minY) / bounds.h,
-  });
-  const tl = n(q.tl);
-  const tr = n(q.tr);
-  const br = n(q.br);
-  const bl = n(q.bl);
-  return squareToQuadMatrix3d(tl.x, tl.y, tr.x, tr.y, br.x, br.y, bl.x, bl.y);
+/** Homography for a layer covering the full sticker image (inset-0). */
+export function quadHomographyMatrix3d(q: PlateQuadDef): string {
+  return squareToQuadMatrix3d(
+    q.tl.x / 100,
+    q.tl.y / 100,
+    q.tr.x / 100,
+    q.tr.y / 100,
+    q.br.x / 100,
+    q.br.y / 100,
+    q.bl.x / 100,
+    q.bl.y / 100,
+  );
 }
 
-/** @deprecated Use STICKER_PLATE_QUADS + quadBounds for perspective plates. */
+/** @deprecated Use STICKER_PLATE_QUADS + quadClipPath for perspective plates. */
 export const PLATE_BOXES = {
   1: { left: "17%", top: "15%", width: "53%", height: "40%" },
   2: { left: "37%", top: "63%", width: "30%", height: "15%" },

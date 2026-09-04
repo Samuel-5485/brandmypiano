@@ -2,7 +2,7 @@
 
 import { BrandLogo } from "@/components/BrandLogo";
 import {
-  quadBounds,
+  quadClipPath,
   quadHomographyMatrix3d,
   STICKER_PLATE_QUADS,
 } from "@/lib/stickerPlate";
@@ -24,17 +24,15 @@ function PlateLogoWarp({
   mediaClassName: string;
 }) {
   const quad = STICKER_PLATE_QUADS[spotId];
-  const bounds = quadBounds(quad);
-  const matrix = quadHomographyMatrix3d(quad, bounds);
+  const clip = quadClipPath(quad);
+  const matrix = quadHomographyMatrix3d(quad);
 
   return (
     <div
-      className="pointer-events-none absolute overflow-hidden"
+      className="pointer-events-none absolute inset-0 overflow-hidden"
       style={{
-        left: `${bounds.minX}%`,
-        top: `${bounds.minY}%`,
-        width: `${bounds.w}%`,
-        height: `${bounds.h}%`,
+        clipPath: clip,
+        WebkitClipPath: clip,
       }}
     >
       <div
@@ -44,16 +42,14 @@ function PlateLogoWarp({
           transformOrigin: "0 0",
         }}
       >
-        <div className="relative h-full w-full overflow-hidden bg-transparent">
-          <BrandLogo
-            brandName={spot.holderBrand!}
-            logoUrl={spot.holderLogoUrl}
-            knockoutWhite={!spot.holderKeepBackground}
-            plateFill
-            className="bg-transparent"
-            mediaClassName={mediaClassName}
-          />
-        </div>
+        <BrandLogo
+          brandName={spot.holderBrand!}
+          logoUrl={spot.holderLogoUrl}
+          knockoutWhite={!spot.holderKeepBackground}
+          plateFill
+          className="bg-transparent"
+          mediaClassName={mediaClassName}
+        />
       </div>
     </div>
   );
@@ -70,7 +66,7 @@ export function StickerMockup({ spots }: Props) {
         <img
           src="/e383-sticker.jpg"
           alt="Close-up of vinyl sticker plates on the PSR-E383 music rest and above the keys"
-          className="h-auto w-full"
+          className="block h-auto w-full"
           draggable={false}
         />
 
