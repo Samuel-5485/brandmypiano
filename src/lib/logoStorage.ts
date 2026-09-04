@@ -1,0 +1,151 @@
+import { hasSupabaseAdmin, uploadLogo } from "@/lib/supabase/rest";
+
+export const MAX_LOGO_BYTES = 400_000;
+
+const ALLOWED = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+  "image/gif",
+  "image/svg+xml",
+]);
+
+function extFor(type: string): string {
+  if (type === "image/png") return "png";
+  if (type === "image/webp") return "webp";
+  if (type === "image/gif") return "gif";
+  if (type === "image/svg+xml") return "svg";
+  return "jpg";
+}
+
+function logoObjectName(contentType: string): string {
+  return `logo_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}.${extFor(contentType)}`;
+}
+
+export function parseSupabaseError(raw: string, fallback: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return fallback;
+  try {
+    const parsed = JSON.parse(trimmed) as {
+      message?: string;
+      error?: string;
+      statusCode?: string | number;
+    };
+    const parts = [parsed.message, parsed.error, parsed.statusCode]
+      .filter(Boolean)
+      .map(String);
+    if (parts.length) return parts.join(" — ");
+  } catch {
+    // plain text from Supabase
+  }
+  return trimmed.slice(0, 500);
+}
+
+export async function uploadLogoBuffer(
+  buffer: Buffer,
+  contentType: string,
+): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
+  if (!hasSupabaseAdmin()) {
+    return { ok: false, error: "Logo storage is not configured (Supabase env missing)." };
+  }
+  if (!ALLOWED.has(contentType)) {
+    return { ok: false, error: "Use PNG, JPG, WebP, GIF, or SVG." };
+  }
+  if (buffer.length <= 0 || buffer.length > MAX_LOGO_BYTES) {
+    return { ok: false, error: "Logo must be under 400KB." };
+  }
+
+  try {
+    const url = await uploadLogo(logoObjectName(contentType), buffer, contentType);
+    // #region agent log
+    fetch("http://127.0.0.1:7681/ingest/d8bbfca4-00dd-492f-ae23-8c4a307aedad", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "c3e306" },
+      body: JSON.stringify({
+        sessionId: "c3e306",
+        runId: "logo-upload",
+        hypothesisId: "H3",
+        location: "logoStorage.ts:uploadLogoBuffer",
+        message: "logo upload ok",
+        data: { bytes: buffer.length, contentType },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
+    return { ok: true, url };
+  } catch (err) {
+    const raw = err instanceof Error ? err.message : String(err);
+    const error = parseSupabaseError(raw, "Logo upload failed.");
+    // #region agent log
+    fetch("http://127.0.0.1:7681/ingest/d8bbfca4-00dd-492f-ae23-8c4a307aedad", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "c3e306" },
+      body: JSON.stringify({
+        sessionId: "c3e306",
+        runId: "logo-upload",
+        hypothesisId: "H1-H2",
+        location: "logoStorage.ts:uploadLogoBuffer",
+        message: "logo upload failed",
+        data: { error, rawPreview: raw.slice(0, 200) },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
+    return { ok: false, error };
+  }
+}
+
+function parseDataUrl(dataUrl: string): { buffer: Buffer; contentType: string } | null {
+  const match = /^data:(image\/[a-z+.-]+);base64,(.+)$/i.exec(dataUrl.trim());
+  if (!match) return null;
+  const contentType = match[1].toLowerCase();
+  if (!ALLOWED.has(contentType)) return null;
+  try {
+    const buffer = Buffer.from(match[2], "base64");
+    return { buffer, contentType };
+  } catch {
+    return null;
+  }
+}
+
+export async function resolveLogoForBid(input: {
+  logoUrl?: string;
+  file?: File | null;
+}): Promise<{ url: string | null; warning?: string }> {
+  if (input.file && input.file.size > 0) {
+    const buffer = Buffer.from(await input.file.arrayBuffer());
+    const uploaded = await uploadLogoBuffer(buffer, input.file.type || "image/png");
+    if (uploaded.ok) return { url: uploaded.url };
+    return { url: null, warning: `Bid saved, logo failed: ${uploaded.error}` };
+  }
+
+  const logoUrl = String(input.logoUrl ?? "").trim();
+  if (!logoUrl) return { url: null };
+
+  if (/^https?:\/\//i.test(logoUrl)) {
+    return { url: logoUrl };
+  }
+
+  if (logoUrl.startsWith("data:image/")) {
+    if (logoUrl.length > MAX_LOGO_BYTES * 1.4) {
+      return {
+        url: null,
+        warning:
+          "Bid saved, logo failed: image data is too large for upload. Use a smaller file or https URL.",
+      };
+    }
+    const parsed = parseDataUrl(logoUrl);
+    if (!parsed) {
+      return { url: null, warning: "Bid saved, logo failed: invalid image data URL." };
+    }
+    const uploaded = await uploadLogoBuffer(parsed.buffer, parsed.contentType);
+    if (uploaded.ok) return { url: uploaded.url };
+    return { url: null, warning: `Bid saved, logo failed: ${uploaded.error}` };
+  }
+
+  if (logoUrl.startsWith("/logos/")) {
+    return { url: logoUrl };
+  }
+
+  return { url: null, warning: "Bid saved, logo failed: logo must be https URL or an uploaded image." };
+}

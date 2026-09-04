@@ -1,61 +1,51 @@
-import { hasSupabaseAdmin, uploadLogo } from "@/lib/supabase/rest";
+import { apiError, apiOk } from "@/lib/apiResponse";
+import { uploadLogoBuffer } from "@/lib/logoStorage";
+import { hasSupabaseAdmin } from "@/lib/supabase/rest";
 import { promises as fs } from "fs";
 import path from "path";
-import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-
-const MAX_BYTES = 400_000; // ~400KB
-const ALLOWED = new Set(["image/png", "image/jpeg", "image/webp", "image/gif", "image/svg+xml"]);
-
-function extFor(type: string): string {
-  if (type === "image/png") return "png";
-  if (type === "image/webp") return "webp";
-  if (type === "image/gif") return "gif";
-  if (type === "image/svg+xml") return "svg";
-  return "jpg";
-}
 
 export async function POST(request: Request) {
   let form: FormData;
   try {
     form = await request.formData();
   } catch {
-    return NextResponse.json({ error: "Expected multipart form data." }, { status: 400 });
+    return apiError("Expected multipart form data.", 400);
   }
 
   const file = form.get("file");
   if (!(file instanceof File)) {
-    return NextResponse.json({ error: "Missing file." }, { status: 400 });
-  }
-  if (!ALLOWED.has(file.type)) {
-    return NextResponse.json(
-      { error: "Use PNG, JPG, WebP, GIF, or SVG." },
-      { status: 400 },
-    );
-  }
-  if (file.size <= 0 || file.size > MAX_BYTES) {
-    return NextResponse.json(
-      { error: "Logo must be under 400KB." },
-      { status: 400 },
-    );
+    return apiError("Missing file.", 400);
   }
 
   const buffer = Buffer.from(await file.arrayBuffer());
-  const name = `logo_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}.${extFor(file.type)}`;
+  const contentType = file.type || "image/png";
+
+  if (hasSupabaseAdmin()) {
+    const result = await uploadLogoBuffer(buffer, contentType);
+    if (!result.ok) return apiError(result.error, 500);
+    return apiOk({ url: result.url });
+  }
 
   try {
-    if (hasSupabaseAdmin()) {
-      const url = await uploadLogo(name, buffer, file.type);
-      return NextResponse.json({ ok: true, url });
-    }
-
+    const ext = contentType.includes("png")
+      ? "png"
+      : contentType.includes("webp")
+        ? "webp"
+        : contentType.includes("gif")
+          ? "gif"
+          : contentType.includes("svg")
+            ? "svg"
+            : "jpg";
+    const name = `logo_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}.${ext}`;
     const dir = path.join(process.cwd(), "public", "logos");
     await fs.mkdir(dir, { recursive: true });
     await fs.writeFile(path.join(dir, name), buffer);
-    return NextResponse.json({ ok: true, url: `/logos/${name}` });
-  } catch {
-    return NextResponse.json({ error: "Could not store logo." }, { status: 500 });
+    return apiOk({ url: `/logos/${name}` });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Could not store logo locally.";
+    return apiError(message, 500);
   }
 }

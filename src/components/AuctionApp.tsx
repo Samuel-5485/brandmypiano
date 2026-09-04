@@ -31,8 +31,18 @@ export function AuctionApp({ initialBoard, boardUnavailable = false }: Props) {
         return;
       }
       if (!res.ok) return;
-      const data = (await res.json()) as PublicBoard;
-      setBoard(data);
+      const raw = await res.text();
+      if (!raw.trim()) {
+        setUnavailable(true);
+        return;
+      }
+      const data = JSON.parse(raw) as PublicBoard & { ok?: boolean };
+      if (data.ok === false) {
+        setUnavailable(true);
+        return;
+      }
+      const { ok: _ok, ...board } = data;
+      setBoard(board as PublicBoard);
       setUnavailable(false);
     } catch {
       setUnavailable(true);

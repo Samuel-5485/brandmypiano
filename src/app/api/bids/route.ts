@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import { getSpot } from "@/config";
 import {
   auctionEnded,
@@ -7,92 +6,135 @@ import {
   normalizeHandle,
   validateNewBidAmount,
 } from "@/lib/auction";
+import { apiError, apiOk } from "@/lib/apiResponse";
+import { resolveLogoForBid } from "@/lib/logoStorage";
 import { BoardLoadError, newBidId, readAuctionFile, withAuctionLock } from "@/lib/store";
 import type { Bid } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+type BidBody = {
+  spotId?: number;
+  brandName?: string;
+  handle?: string;
+  website?: string;
+  logoUrl?: string;
+  amount?: number;
+};
+
+async function parseBidRequest(request: Request): Promise<{
+  body: BidBody;
+  file: File | null;
+}> {
+  const contentType = request.headers.get("content-type") ?? "";
+  if (contentType.includes("multipart/form-data")) {
+    const form = await request.formData();
+    const rawFile = form.get("file");
+    const file = rawFile instanceof File && rawFile.size > 0 ? rawFile : null;
+    return {
+      body: {
+        spotId: Number(form.get("spotId")),
+        brandName: String(form.get("brandName") ?? ""),
+        handle: String(form.get("handle") ?? ""),
+        website: String(form.get("website") ?? ""),
+        logoUrl: String(form.get("logoUrl") ?? ""),
+        amount: Number(form.get("amount")),
+      },
+      file,
+    };
+  }
+
+  try {
+    const body = (await request.json()) as BidBody;
+    return { body, file: null };
+  } catch {
+    throw new Error("Invalid JSON body.");
+  }
+}
+
 export async function GET() {
   try {
     const file = await readAuctionFile();
-    return NextResponse.json(
-      buildPublicBoard(file.bids, file.lockedSpotIds ?? []),
+    return apiOk(
+      buildPublicBoard(file.bids, file.lockedSpotIds ?? []) as unknown as Record<
+        string,
+        unknown
+      >,
     );
   } catch (err) {
     if (err instanceof BoardLoadError) {
-      return NextResponse.json({ error: err.message }, { status: 503 });
+      return apiError(err.message, 503);
     }
-    throw err;
+    return apiError(
+      err instanceof Error ? err.message : "Could not load board.",
+      500,
+    );
   }
 }
 
 export async function POST(request: Request) {
   try {
     if (auctionEnded()) {
-      return NextResponse.json(
-        { error: "The auction has ended. No new bids are accepted." },
-        { status: 403 },
-      );
+      return apiError("The auction has ended. No new bids are accepted.", 403);
     }
 
-    let body: {
-      spotId?: number;
-      brandName?: string;
-      handle?: string;
-      website?: string;
-      logoUrl?: string;
-      amount?: number;
-    };
-
+    let body: BidBody;
+    let file: File | null;
     try {
-      body = await request.json();
-    } catch {
-      return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+      ({ body, file } = await parseBidRequest(request));
+    } catch (err) {
+      return apiError(
+        err instanceof Error ? err.message : "Invalid request body.",
+        400,
+      );
     }
 
     const spotId = Number(body.spotId);
     const spot = getSpot(spotId);
     if (!spot) {
-      return NextResponse.json({ error: "Unknown spot." }, { status: 400 });
+      return apiError("Unknown spot.", 400);
     }
 
     const brandName = String(body.brandName ?? "").trim();
     const handle = normalizeHandle(String(body.handle ?? ""));
     const website = String(body.website ?? "").trim();
-    const logoUrl = String(body.logoUrl ?? "").trim();
     const amount = Number(body.amount);
 
     if (brandName.length < 2) {
-      return NextResponse.json(
-        { error: "Brand name must be at least 2 characters." },
-        { status: 400 },
-      );
+      return apiError("Brand name must be at least 2 characters.", 400);
     }
     if (handle.length < 2) {
-      return NextResponse.json(
-        { error: "Add your X handle so I can reach you." },
-        { status: 400 },
-      );
+      return apiError("Add your X handle so I can reach you.", 400);
     }
     if (website && !/^https?:\/\//i.test(website)) {
-      return NextResponse.json(
-        { error: "Website must start with http:// or https://." },
-        { status: 400 },
-      );
+      return apiError("Website must start with http:// or https://.", 400);
     }
-    if (logoUrl) {
-      const ok =
-        logoUrl.startsWith("/logos/") ||
-        logoUrl.startsWith("data:image/") ||
-        /^https?:\/\//i.test(logoUrl);
-      if (!ok) {
-        return NextResponse.json(
-          { error: "Logo must be an http(s) URL or an uploaded /logos/ path." },
-          { status: 400 },
-        );
-      }
-    }
+
+    const logo = await resolveLogoForBid({
+      logoUrl: String(body.logoUrl ?? "").trim(),
+      file,
+    });
+
+    // #region agent log
+    fetch("http://127.0.0.1:7681/ingest/d8bbfca4-00dd-492f-ae23-8c4a307aedad", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "c3e306" },
+      body: JSON.stringify({
+        sessionId: "c3e306",
+        runId: "bid-post",
+        hypothesisId: "H4",
+        location: "api/bids/route.ts:POST",
+        message: "logo resolved for bid",
+        data: {
+          hadFile: Boolean(file),
+          logoUrlSet: Boolean(logo.url),
+          warning: logo.warning ?? null,
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
 
     const outcome = await withAuctionLock(async (file) => {
       const locked = file.lockedSpotIds ?? [];
@@ -106,7 +148,7 @@ export async function POST(request: Request) {
         brandName,
         handle,
         website,
-        logoUrl,
+        logoUrl: logo.url ?? undefined,
         amount,
         deposit: calcDeposit(amount),
         status: "pending",
@@ -120,25 +162,40 @@ export async function POST(request: Request) {
     });
 
     if ("error" in outcome) {
-      return NextResponse.json({ error: outcome.error }, { status: 400 });
+      return apiError(outcome.error, 400);
     }
 
-    const file = await readAuctionFile();
-    const board = buildPublicBoard(file.bids, file.lockedSpotIds ?? []);
+    const auctionFile = await readAuctionFile();
+    const board = buildPublicBoard(auctionFile.bids, auctionFile.lockedSpotIds ?? []);
 
-    return NextResponse.json({
-      ok: true,
+    return apiOk({
       bid: outcome.result,
       board,
       message:
         "Bid is live on the board. Pay to lock only if you are the current leader on this spot.",
+      ...(logo.warning ? { warning: logo.warning } : {}),
     });
   } catch (err) {
     if (err instanceof BoardLoadError) {
-      return NextResponse.json({ error: err.message }, { status: 503 });
+      return apiError(err.message, 503);
     }
     const message =
       err instanceof Error ? err.message : "Could not save bid. Try again.";
-    return NextResponse.json({ error: message }, { status: 500 });
+    // #region agent log
+    fetch("http://127.0.0.1:7681/ingest/d8bbfca4-00dd-492f-ae23-8c4a307aedad", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "c3e306" },
+      body: JSON.stringify({
+        sessionId: "c3e306",
+        runId: "bid-post",
+        hypothesisId: "H5",
+        location: "api/bids/route.ts:POST:catch",
+        message: "bid save failed",
+        data: { error: message },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
+    return apiError(message, 500);
   }
 }

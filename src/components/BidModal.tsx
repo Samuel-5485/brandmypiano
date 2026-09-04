@@ -32,9 +32,11 @@ export function BidModal({
   const [handle, setHandle] = useState("");
   const [website, setWebsite] = useState("");
   const [logoUrl, setLogoUrl] = useState("");
+  const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoFileName, setLogoFileName] = useState("");
   const [amount, setAmount] = useState("");
   const [error, setError] = useState("");
+  const [warning, setWarning] = useState("");
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState<{
     amount: number;
@@ -66,11 +68,13 @@ export function BidModal({
     setHandle(saved);
     setWebsite("");
     setLogoUrl("");
+    setLogoFile(null);
     setLogoFileName("");
     setAmount(
       String(prefillAmount ?? currentSpot?.minNextBid ?? ""),
     );
     setError("");
+    setWarning("");
     setDone(null);
     setBusy(false);
   }, [open, spotId, prefillAmount]);
@@ -102,31 +106,45 @@ export function BidModal({
       ? lockPaymentUrl(paymentLink, done.amount)
       : "";
 
-  async function uploadLogo(file: File): Promise<string> {
-    const body = new FormData();
-    body.append("file", file);
-    const res = await fetch("/api/logos", { method: "POST", body });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "Logo upload failed.");
-    return String(data.url);
-  }
-
-  async function onLogoFile(file: File | null) {
+  function onLogoFile(file: File | null) {
     if (!file) {
+      setLogoFile(null);
       setLogoFileName("");
       return;
     }
-    setBusy(true);
+    setLogoFile(file);
+    setLogoFileName(file.name);
+    setLogoUrl("");
     setError("");
+  }
+
+  async function readJsonResponse(res: Response): Promise<{
+    ok?: boolean;
+    error?: string;
+    warning?: string;
+    bid?: { spotId: number; amount: number; brandName: string };
+    board?: { spots?: SpotPublicState[] };
+  } | null> {
+    const raw = await res.text();
+    if (!raw.trim()) {
+      setError("Server returned empty answer.");
+      return null;
+    }
     try {
-      const url = await uploadLogo(file);
-      setLogoUrl(url);
-      setLogoFileName(file.name);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Logo upload failed.");
-      setLogoFileName("");
-    } finally {
-      setBusy(false);
+      return JSON.parse(raw) as {
+        ok?: boolean;
+        error?: string;
+        warning?: string;
+        bid?: { spotId: number; amount: number; brandName: string };
+        board?: { spots?: SpotPublicState[] };
+      };
+    } catch {
+      setError(
+        res.ok
+          ? "Unexpected server response."
+          : `Could not save bid (HTTP ${res.status}).`,
+      );
+      return null;
     }
   }
 
@@ -142,36 +160,36 @@ export function BidModal({
     }
     setBusy(true);
     setError("");
+    setWarning("");
     try {
-      const res = await fetch("/api/bids", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          spotId: spot!.spotId,
-          brandName,
-          handle: normalizedHandle,
-          website,
-          logoUrl: logoUrl.trim(),
-          amount: Number(amount),
-        }),
-      });
-      const raw = await res.text();
-      let data: {
-        error?: string;
-        bid?: { spotId: number; amount: number; brandName: string };
-        board?: { spots?: SpotPublicState[] };
-      };
-      try {
-        data = JSON.parse(raw) as typeof data;
-      } catch {
-        setError(
-          res.ok
-            ? "Unexpected server response."
-            : `Could not save bid (HTTP ${res.status}).`,
-        );
-        return;
+      let res: Response;
+      if (logoFile) {
+        const body = new FormData();
+        body.append("spotId", String(spot!.spotId));
+        body.append("brandName", brandName);
+        body.append("handle", normalizedHandle);
+        body.append("website", website);
+        body.append("amount", String(amount));
+        body.append("file", logoFile);
+        res = await fetch("/api/bids", { method: "POST", body });
+      } else {
+        res = await fetch("/api/bids", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            spotId: spot!.spotId,
+            brandName,
+            handle: normalizedHandle,
+            website,
+            logoUrl: logoUrl.trim(),
+            amount: Number(amount),
+          }),
+        });
       }
-      if (!res.ok) {
+
+      const data = await readJsonResponse(res);
+      if (!data) return;
+      if (data.ok === false || !res.ok) {
         setError(data.error || "Could not save bid.");
         return;
       }
@@ -191,6 +209,9 @@ export function BidModal({
         brandName: data.bid.brandName,
         isLeader: leader?.holderHandle === normalizedHandle,
       });
+      if (data.warning) {
+        setWarning(data.warning);
+      }
       onSubmitted();
     } catch {
       setError("Network error. Try again.");
@@ -264,6 +285,11 @@ export function BidModal({
               Your bid is live on spot {done.spotId} — {money(done.amount)} for{" "}
               {done.brandName}.
             </p>
+            {warning && (
+              <p className="rounded-md border border-gold/40 bg-gold/10 px-3 py-2 text-gold">
+                {warning}
+              </p>
+            )}
             {done.isLeader ? (
               <>
                 <p>
@@ -370,6 +396,7 @@ export function BidModal({
                 value={logoUrl}
                 onChange={(e) => {
                   setLogoUrl(e.target.value);
+                  setLogoFile(null);
                   setLogoFileName("");
                 }}
                 className="focus-ring w-full rounded-md border border-line bg-bg px-3 py-3 text-cream"
