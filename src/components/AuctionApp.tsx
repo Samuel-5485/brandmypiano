@@ -193,12 +193,13 @@ export function AuctionApp({ initialBoard, boardUnavailable = false }: Props) {
           <ol className="mt-8 max-w-2xl space-y-4 text-base leading-relaxed text-dim">
             <li>
               <span className="font-medium text-cream">1.</span> Pick a spot and
-              bid.
+              bid — free and public. No charge on the Bid button.
             </li>
             <li>
-              <span className="font-medium text-cream">2.</span> Pay the bid
-              through Polar. If someone outbids you on that same spot, you are
-              refunded. If you stay 1st and lock, you are not refunded.
+              <span className="font-medium text-cream">2.</span> If you are 1st,
+              click <span className="text-cream">Pay to lock</span> and pay through
+              Polar. Beaten payers who never paid owe $0. If you paid and get
+              outbid, you are refunded.
             </li>
             <li>
               <span className="font-medium text-cream">3.</span> 1st place logo
@@ -211,8 +212,11 @@ export function AuctionApp({ initialBoard, boardUnavailable = false }: Props) {
           </p>
           <ul className="mt-4 max-w-2xl space-y-2 text-sm leading-relaxed text-dim">
             <li>
+              Bids are free until you choose Pay to lock as the current 1st.
+            </li>
+            <li>
               Paid + not locked = others may outbid that same spot. Beaten payer
-              is refunded.
+              is refunded; never paid = $0 owed.
             </li>
             <li>
               Locked = nobody else can buy that spot. No refund to the locked

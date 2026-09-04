@@ -10,6 +10,7 @@ import {
 } from "@/lib/auction";
 import type { PublicBoard, SpotOffer, SpotPublicState } from "@/lib/types";
 import { BrandLogo } from "@/components/BrandLogo";
+import { PayToLockButton } from "@/components/PayToLockButton";
 
 const HANDLE_KEY = "brandmypiano-handle";
 
@@ -139,6 +140,7 @@ export function LiveAuctionBoard({
             spot={selectedSpot}
             ended={board.ended}
             viewerHandle={viewerHandle}
+            paymentLink={board.paymentLink}
             onBid={(amount) => {
               if (selectedSpot) onBidSpot(selectedSpot.spotId, amount);
             }}
@@ -212,11 +214,13 @@ function ThisSpotPanel({
   spot,
   ended,
   viewerHandle,
+  paymentLink,
   onBid,
 }: {
   spot: SpotPublicState | null;
   ended: boolean;
   viewerHandle: string;
+  paymentLink: string;
   onBid: (prefillAmount: number) => void;
 }) {
   const viewerRowRef = useRef<HTMLLIElement>(null);
@@ -244,6 +248,12 @@ function ThisSpotPanel({
 
   const disabled = ended || spot.locked;
   const leader = spot.offers[0] ?? null;
+  const viewerIsLeader =
+    Boolean(leader) &&
+    viewerHandle.length > 1 &&
+    leader!.handle === viewerHandle &&
+    !spot.locked &&
+    !ended;
 
   const raceSummary =
     rest.length === 0
@@ -320,14 +330,28 @@ function ThisSpotPanel({
         </button>
       )}
 
-      {leader && !disabled && spot.offers.length > 0 && (
+      {viewerIsLeader && leader && (
+        <div className="mt-4 shrink-0 space-y-2">
+          <PayToLockButton
+            paymentLink={paymentLink}
+            bidAmount={leader.amount}
+            fullWidth
+          />
+          <p className="text-xs leading-relaxed text-dim">
+            Pay through Polar. If someone outbids you before lock, you owe $0.
+            After I confirm payment and lock, no refund.
+          </p>
+        </div>
+      )}
+
+      {!viewerIsLeader && leader && !disabled && spot.offers.length > 0 && (
         <button
           type="button"
           onClick={() => onBid(spot.minNextBid)}
           className="focus-ring mt-4 w-full shrink-0 rounded-md px-4 py-2.5 text-sm font-medium transition hover:opacity-90"
           style={{ background: "var(--button-bg)", color: "var(--button-text)" }}
         >
-          {spot.hasBid ? "Outbid" : "Bid"} · {money(spot.minNextBid)} min
+          Outbid · {money(spot.minNextBid)} min
         </button>
       )}
 
@@ -517,7 +541,7 @@ function SpotRow({
           <span className="text-xs leading-snug text-dim">
             Auction ended — locking winners.
           </span>
-        ) : ended ? null : (
+        ) : ended || spot.locked ? null : (
           <button
             type="button"
             onClick={(e) => {
@@ -528,7 +552,7 @@ function SpotRow({
             className="focus-ring rounded-md px-3 py-2 text-sm font-medium transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
             style={{ background: "var(--button-bg)", color: "var(--button-text)" }}
           >
-            {spot.locked ? "Locked" : hasLeader ? "Outbid" : "Bid"}
+            {hasLeader ? "Outbid" : "Bid"}
           </button>
         )}
       </td>

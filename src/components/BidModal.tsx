@@ -4,6 +4,7 @@ import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { CONFIG } from "@/config";
 import { lockPaymentUrl, money, normalizeHandle } from "@/lib/auction";
 import type { SpotPublicState } from "@/lib/types";
+import { PayToLockButton } from "@/components/PayToLockButton";
 
 const HANDLE_KEY = "brandmypiano-handle";
 
@@ -174,12 +175,46 @@ export function BidModal({
     }
   }
 
-  async function finishSuccess() {
+  async function checkIsLeader(
+    targetSpotId: number,
+    targetHandle: string,
+  ): Promise<{ isLeader: boolean; leaderAmount: number }> {
+    try {
+      const boardRes = await fetch("/api/bids", { cache: "no-store" });
+      const boardText = await boardRes.text();
+      if (!boardText.trim()) return { isLeader: false, leaderAmount: 0 };
+      const boardData = JSON.parse(boardText) as {
+        ok?: boolean;
+        spots?: SpotPublicState[];
+      };
+      const spots = boardData.spots;
+      if (!spots) return { isLeader: false, leaderAmount: 0 };
+      const targetSpot = spots.find((s) => s.spotId === targetSpotId);
+      const leader = targetSpot?.offers[0];
+      if (!leader) return { isLeader: false, leaderAmount: 0 };
+      return {
+        isLeader: normalizeHandle(leader.handle) === targetHandle,
+        leaderAmount: leader.amount,
+      };
+    } catch {
+      return { isLeader: false, leaderAmount: 0 };
+    }
+  }
+
+  async function finishSuccess(asLeader?: {
+    amount: number;
+    spotId: number;
+    brandName: string;
+  }) {
     if (typeof window !== "undefined") {
       localStorage.setItem(HANDLE_KEY, normalizedHandle);
     }
     setError("");
     await onSubmitted();
+    if (asLeader) {
+      setDone({ ...asLeader, isLeader: true });
+      return;
+    }
     onClose();
   }
 
@@ -221,7 +256,16 @@ export function BidModal({
 
       if (!text.trim()) {
         if (res.ok) {
-          await finishSuccess();
+          const { isLeader } = await checkIsLeader(spot!.spotId, normalizedHandle);
+          if (isLeader) {
+            await finishSuccess({
+              amount: bidAmount,
+              spotId: spot!.spotId,
+              brandName: brandName.trim(),
+            });
+          } else {
+            await finishSuccess();
+          }
           return;
         }
         setError(`Could not save bid (HTTP ${res.status}).`);
@@ -253,14 +297,35 @@ export function BidModal({
           bidAmount,
         );
         if (visible) {
-          await finishSuccess();
+          const { isLeader } = await checkIsLeader(spot!.spotId, normalizedHandle);
+          if (isLeader) {
+            await finishSuccess({
+              amount: bidAmount,
+              spotId: spot!.spotId,
+              brandName: brandName.trim(),
+            });
+          } else {
+            await finishSuccess();
+          }
           return;
         }
         setError(data.error || "Could not save bid.");
         return;
       }
 
-      await finishSuccess();
+      const { isLeader, leaderAmount } = await checkIsLeader(
+        spot!.spotId,
+        normalizedHandle,
+      );
+      if (isLeader) {
+        await finishSuccess({
+          amount: leaderAmount || bidAmount,
+          spotId: spot!.spotId,
+          brandName: brandName.trim(),
+        });
+      } else {
+        await finishSuccess();
+      }
     } catch {
       const visible = await bidVisibleOnBoard(
         spot!.spotId,
@@ -268,7 +333,19 @@ export function BidModal({
         Number(amount),
       );
       if (visible) {
-        await finishSuccess();
+        const { isLeader, leaderAmount } = await checkIsLeader(
+          spot!.spotId,
+          normalizedHandle,
+        );
+        if (isLeader) {
+          await finishSuccess({
+            amount: leaderAmount || Number(amount),
+            spotId: spot!.spotId,
+            brandName: brandName.trim(),
+          });
+        } else {
+          await finishSuccess();
+        }
         return;
       }
       setError("Network error. Try again.");
@@ -319,19 +396,16 @@ export function BidModal({
         {isCurrentLeader && !done && payUrl && (
           <div className="mb-4 rounded-md border border-gold/40 bg-gold/5 px-3 py-3 text-sm">
             <p className="text-cream">You are the highest bid on this spot.</p>
-            <a
-              href={payUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="focus-ring mt-2 inline-block rounded-md px-4 py-2 font-medium transition hover:opacity-90"
-              style={{ background: "var(--button-bg)", color: "var(--button-text)" }}
-            >
-              Pay to lock this spot
-            </a>
+            <div className="mt-2">
+              <PayToLockButton
+                paymentLink={paymentLink}
+                bidAmount={leaderBid}
+              />
+            </div>
             <p className="mt-2 text-xs leading-relaxed text-dim">
-              Pay your bid through Polar. If someone outbids you before lock, you
-              are refunded. After I confirm payment and lock this spot, no refund.{" "}
-              {CONFIG.refundPublicCopy}
+              Bids are free. Pay only when you are ready to lock. If someone
+              outbids you before lock, you owe $0. After I confirm payment and
+              lock this spot, no refund. {CONFIG.refundPublicCopy}
             </p>
           </div>
         )}
@@ -351,22 +425,16 @@ export function BidModal({
                 </p>
                 {donePayUrl ? (
                   <>
-                    <a
-                      href={donePayUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="focus-ring inline-block w-full rounded-md px-4 py-3 text-center font-medium transition hover:opacity-90"
-                      style={{
-                        background: "var(--button-bg)",
-                        color: "var(--button-text)",
-                      }}
-                    >
-                      Pay to lock this spot
-                    </a>
+                    <PayToLockButton
+                      paymentLink={paymentLink}
+                      bidAmount={done.amount}
+                      fullWidth
+                      className="py-3"
+                    />
                     <p className="text-xs">
-                      Pay through Polar. I confirm payment in admin, then lock the
-                      spot. {CONFIG.refundPublicCopy} Logo stays{" "}
-                      {CONFIG.stickerDuration}
+                      Opens Polar checkout. I confirm payment in admin, then lock
+                      the spot. Beaten payers are refunded. If you never paid,
+                      you owe $0. Logo stays {CONFIG.stickerDuration}
                     </p>
                   </>
                 ) : (

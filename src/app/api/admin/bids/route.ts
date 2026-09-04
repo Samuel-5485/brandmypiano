@@ -128,7 +128,15 @@ export async function POST(request: Request) {
       if (idx < 0) return { error: "Bid not found." };
       const nextBids = [...file.bids];
       const target = { ...nextBids[idx] };
+      if (target.status === "rejected") return { error: "Bid was rejected." };
       if (target.refundedAt) return { error: "Already refunded." };
+      if (isSpotLocked(file.lockedSpotIds ?? [], target.spotId)) {
+        return { error: "Spot is already locked." };
+      }
+      const leader = highestForSpot(nextBids, target.spotId);
+      if (!leader || leader.id !== target.id) {
+        return { error: "Only the current 1st bidder can confirm payment." };
+      }
       const now = new Date().toISOString();
       target.paidAt = now;
       target.updatedAt = now;
