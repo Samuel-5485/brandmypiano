@@ -3,10 +3,11 @@
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import { BrandLogo } from "@/components/BrandLogo";
 import {
+  centeredLogoLayerSize,
   isMatrix3dStable,
-  logoLayerPixelSize,
   quadClipPath,
   quadPercentToPixels,
+  quadPlateHeight,
   rectToQuadMatrix3d,
   STICKER_PLATE_QUADS,
 } from "@/lib/stickerPlate";
@@ -17,6 +18,9 @@ type Props = {
 };
 
 export { STICKER_PLATE_ASPECT, PLATE_BOXES } from "@/lib/stickerPlate";
+
+/** Spot 1 music rest — centered mark ~60% of plate height; spot 2 smaller plate. */
+const LOGO_HEIGHT_FRACTION: Record<1 | 2, number> = { 1: 0.6, 2: 0.58 };
 
 type PhotoMetrics = { w: number; h: number };
 
@@ -51,9 +55,13 @@ function PlateLogoWarp({
     }
 
     const { w, h } = metrics;
-    const destPx = quadPercentToPixels(quadPercent, w, h);
-    const { logoW, logoH } = logoLayerPixelSize(quadPercent, w, h);
-    const matrix = rectToQuadMatrix3d(logoW, logoH, destPx);
+    const platePx = quadPercentToPixels(quadPercent, w, h);
+    const heightFraction = LOGO_HEIGHT_FRACTION[spotId];
+    const { logoW, logoH, innerQuad } = centeredLogoLayerSize(
+      platePx,
+      heightFraction,
+    );
+    const matrix = rectToQuadMatrix3d(logoW, logoH, innerQuad);
 
     // #region agent log
     fetch("http://127.0.0.1:7681/ingest/d8bbfca4-00dd-492f-ae23-8c4a307aedad", {
@@ -65,20 +73,21 @@ function PlateLogoWarp({
       body: JSON.stringify({
         sessionId: "c3e306",
         location: "StickerMockup.tsx:warp",
-        message: "pixel homography computed",
+        message: "centered mark homography",
         data: {
           spotId,
           photoW: w,
           photoH: h,
+          plateHeight: quadPlateHeight(platePx),
+          markHeight: quadPlateHeight(innerQuad),
+          heightFraction,
           logoW,
           logoH,
-          destTl: destPx.tl,
           matrixStable: isMatrix3dStable(matrix),
-          matrixPreview: matrix?.slice(0, 80),
         },
         timestamp: Date.now(),
-        hypothesisId: "H1-pixel-homography",
-        runId: "post-fix",
+        hypothesisId: "H2-centered-letterbox",
+        runId: "post-fix-2",
       }),
     }).catch(() => {});
     // #endregion
@@ -104,26 +113,38 @@ function PlateLogoWarp({
         }}
       >
         <div
-          className="h-full w-full bg-transparent"
-          style={{ transform: "rotateX(10deg)", transformOrigin: "center center" }}
+          className="flex items-center justify-center bg-transparent"
+          style={{
+            height: `${LOGO_HEIGHT_FRACTION[spotId] * 100}%`,
+            aspectRatio: "1 / 1",
+            transform: "rotateX(10deg)",
+            transformOrigin: "center center",
+          }}
         >
           <BrandLogo
             brandName={spot.holderBrand!}
             logoUrl={spot.holderLogoUrl}
             knockoutWhite={!spot.holderKeepBackground}
-            plateFill
-            className="bg-transparent"
-            mediaClassName={mediaClassName}
+            className="flex h-full w-full items-center justify-center bg-transparent"
+            mediaClassName={`max-h-full max-w-full object-contain ${mediaClassName}`}
           />
         </div>
       </div>
     );
   }
 
+  const plateClip = quadClipPath(quadPercent);
+
   return (
-    <div className="pointer-events-none absolute inset-0 overflow-visible">
+    <div
+      className="pointer-events-none absolute inset-0 overflow-hidden"
+      style={{
+        clipPath: plateClip,
+        WebkitClipPath: plateClip,
+      }}
+    >
       <div
-        className="absolute left-0 top-0 origin-top-left bg-transparent"
+        className="absolute left-0 top-0 flex items-center justify-center bg-transparent"
         style={{
           width: warp.logoW,
           height: warp.logoH,
@@ -135,9 +156,8 @@ function PlateLogoWarp({
           brandName={spot.holderBrand!}
           logoUrl={spot.holderLogoUrl}
           knockoutWhite={!spot.holderKeepBackground}
-          plateFill
-          className="h-full w-full bg-transparent"
-          mediaClassName={mediaClassName}
+          className="flex h-full w-full items-center justify-center bg-transparent"
+          mediaClassName={`max-h-full max-w-full object-contain ${mediaClassName}`}
         />
       </div>
     </div>

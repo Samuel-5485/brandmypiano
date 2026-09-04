@@ -36,6 +36,65 @@ export function quadBounds(q: PlateQuadDef) {
   return { minX, minY, w: maxX - minX, h: maxY - minY };
 }
 
+function dist(a: Pt, b: Pt): number {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  return Math.hypot(dx, dy);
+}
+
+/** Bilinear point inside a quad (u,v ∈ [0,1]). */
+export function bilinearQuad(q: PlateQuadDef, u: number, v: number): Pt {
+  const { tl, tr, br, bl } = q;
+  const a = 1 - u;
+  const b = 1 - v;
+  return {
+    x: a * b * tl.x + u * b * tr.x + a * v * bl.x + u * v * br.x,
+    y: a * b * tl.y + u * b * tr.y + a * v * bl.y + u * v * br.y,
+  };
+}
+
+function quadFromParametric(
+  q: PlateQuadDef,
+  u0: number,
+  v0: number,
+  u1: number,
+  v1: number,
+): PlateQuadDef {
+  return {
+    tl: bilinearQuad(q, u0, v0),
+    tr: bilinearQuad(q, u1, v0),
+    br: bilinearQuad(q, u1, v1),
+    bl: bilinearQuad(q, u0, v1),
+  };
+}
+
+/** Average vertical edge length of a quad in pixels. */
+export function quadPlateHeight(q: PlateQuadDef): number {
+  return (dist(q.tl, q.bl) + dist(q.tr, q.br)) / 2;
+}
+
+/** Centered inner quad preserving plate perspective; height ≈ fraction of outer. */
+export function innerCenteredLogoQuad(
+  q: PlateQuadDef,
+  heightFraction = 0.6,
+): PlateQuadDef {
+  const outerH = quadPlateHeight(q);
+  const targetH = outerH * heightFraction;
+
+  let lo = 0;
+  let hi = 0.49;
+  for (let i = 0; i < 24; i++) {
+    const t = (lo + hi) / 2;
+    const inner = quadFromParametric(q, 0.5 - t, 0.5 - t, 0.5 + t, 0.5 + t);
+    const innerH = quadPlateHeight(inner);
+    if (innerH < targetH) lo = t;
+    else hi = t;
+  }
+
+  const t = (lo + hi) / 2;
+  return quadFromParametric(q, 0.5 - t, 0.5 - t, 0.5 + t, 0.5 + t);
+}
+
 export function quadClipPath(q: PlateQuadDef): string {
   const { tl, tr, br, bl } = q;
   return `polygon(${tl.x}% ${tl.y}%, ${tr.x}% ${tr.y}%, ${br.x}% ${br.y}%, ${bl.x}% ${bl.y}%)`;
@@ -141,16 +200,14 @@ export function isMatrix3dStable(matrix: string | null): matrix is string {
   return nums.length === 16 && nums.every((n) => Number.isFinite(n));
 }
 
-/** Logo layer size in pixels — square matching the quad bbox (min side ≥ 1px). */
-export function logoLayerPixelSize(
-  qPercent: PlateQuadDef,
-  photoW: number,
-  photoH: number,
-): { logoW: number; logoH: number } {
-  const px = quadPercentToPixels(qPercent, photoW, photoH);
-  const { w, h } = quadBounds(px);
-  const side = Math.max(w, h, 1);
-  return { logoW: side, logoH: side };
+/** Square logo layer sized to a centered inner mark (~heightFraction of plate). */
+export function centeredLogoLayerSize(
+  platePx: PlateQuadDef,
+  heightFraction = 0.6,
+): { logoW: number; logoH: number; innerQuad: PlateQuadDef } {
+  const innerQuad = innerCenteredLogoQuad(platePx, heightFraction);
+  const side = Math.max(quadPlateHeight(innerQuad), 1);
+  return { logoW: side, logoH: side, innerQuad };
 }
 
 /** @deprecated Use STICKER_PLATE_QUADS + quadClipPath for perspective plates. */
