@@ -1,5 +1,5 @@
 /**
- * One-shot: remove test bids from local JSON or Vercel Blob (uses BLOB_READ_WRITE_TOKEN).
+ * One-shot: remove test bids from local JSON or Supabase.
  * Run: npx tsx scripts/purge-test-bids.ts
  */
 import { readAuctionFile, writeAuctionFile } from "../src/lib/store";

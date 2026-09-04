@@ -9,7 +9,7 @@ import {
   normalizeHandle,
 } from "@/lib/auction";
 import { isAdminAuthenticated } from "@/lib/auth";
-import { newBidId, readAuctionFile, withAuctionLock } from "@/lib/store";
+import { BoardLoadError, deleteBid, newBidId, readAuctionFile, withAuctionLock } from "@/lib/store";
 import { isTestBid } from "@/lib/testBids";
 import type { Bid, BidStatus } from "@/lib/types";
 
@@ -25,9 +25,10 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { searchParams } = new URL(request.url);
-  if (searchParams.get("format") === "csv") {
-    const bids = await readAuctionFile();
+  try {
+    const { searchParams } = new URL(request.url);
+    if (searchParams.get("format") === "csv") {
+      const bids = await readAuctionFile();
     const header = [
       "id",
       "spotId",
@@ -41,6 +42,7 @@ export async function GET(request: Request) {
       "status",
       "paidAt",
       "refundedAt",
+      "refundNeeded",
       "createdAt",
       "updatedAt",
       "note",
@@ -60,6 +62,7 @@ export async function GET(request: Request) {
         bid.status,
         bid.paidAt ?? "",
         bid.refundedAt ?? "",
+        bid.refundNeeded ? "yes" : "",
         bid.createdAt,
         bid.updatedAt,
         bid.note ?? "",
@@ -76,13 +79,19 @@ export async function GET(request: Request) {
     });
   }
 
-  const file = await readAuctionFile();
-  return NextResponse.json({
-    bids: file.bids,
-    board: buildPublicBoard(file.bids, file.lockedSpotIds ?? []),
-    adminNote: CONFIG.adminNote,
-    lockedSpotIds: file.lockedSpotIds ?? [],
-  });
+    const file = await readAuctionFile();
+    return NextResponse.json({
+      bids: file.bids,
+      board: buildPublicBoard(file.bids, file.lockedSpotIds ?? []),
+      adminNote: CONFIG.adminNote,
+      lockedSpotIds: file.lockedSpotIds ?? [],
+    });
+  } catch (err) {
+    if (err instanceof BoardLoadError) {
+      return NextResponse.json({ error: err.message }, { status: 503 });
+    }
+    throw err;
+  }
 }
 
 export async function POST(request: Request) {
@@ -149,6 +158,7 @@ export async function POST(request: Request) {
       }
       const now = new Date().toISOString();
       target.refundedAt = now;
+      target.refundNeeded = false;
       target.updatedAt = now;
       nextBids[idx] = target;
       return { result: target, file: { ...file, bids: nextBids } };
@@ -372,6 +382,39 @@ export async function POST(request: Request) {
       return { result: bid, file: { ...file, bids: [...next, bid] } };
     });
 
+    if ("error" in outcome) {
+      return NextResponse.json({ error: outcome.error }, { status: 400 });
+    }
+    return NextResponse.json({ ok: true, bid: outcome.result });
+  }
+
+  if (action === "delete") {
+    const id = String(body.id ?? "");
+    if (!id) {
+      return NextResponse.json({ error: "Missing bid id." }, { status: 400 });
+    }
+    try {
+      await deleteBid(id);
+      return NextResponse.json({ ok: true });
+    } catch {
+      return NextResponse.json({ error: "Could not delete bid." }, { status: 500 });
+    }
+  }
+
+  if (action === "refund_needed") {
+    const id = String(body.id ?? "");
+    const outcome = await withAuctionLock(async (file) => {
+      const idx = file.bids.findIndex((b) => b.id === id);
+      if (idx < 0) return { error: "Bid not found." };
+      const nextBids = [...file.bids];
+      const target = { ...nextBids[idx] };
+      if (!target.paidAt) return { error: "No payment recorded for this bid." };
+      if (target.refundedAt) return { error: "Already refunded." };
+      target.refundNeeded = true;
+      target.updatedAt = new Date().toISOString();
+      nextBids[idx] = target;
+      return { result: target, file: { ...file, bids: nextBids } };
+    });
     if ("error" in outcome) {
       return NextResponse.json({ error: outcome.error }, { status: 400 });
     }

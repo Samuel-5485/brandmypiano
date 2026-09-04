@@ -20,6 +20,8 @@ export type Bid = {
   paidAt?: string;
   /** Set in admin after a beaten payer is refunded in Polar. */
   refundedAt?: string;
+  /** Admin flag: beaten payer needs a Polar refund. */
+  refundNeeded?: boolean;
 };
 
 export type BidsFile = {

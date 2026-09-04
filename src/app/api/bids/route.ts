@@ -7,17 +7,24 @@ import {
   normalizeHandle,
   validateNewBidAmount,
 } from "@/lib/auction";
-import { newBidId, readAuctionFile, withAuctionLock } from "@/lib/store";
+import { BoardLoadError, newBidId, readAuctionFile, withAuctionLock } from "@/lib/store";
 import type { Bid } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function GET() {
-  const file = await readAuctionFile();
-  return NextResponse.json(
-    buildPublicBoard(file.bids, file.lockedSpotIds ?? []),
-  );
+  try {
+    const file = await readAuctionFile();
+    return NextResponse.json(
+      buildPublicBoard(file.bids, file.lockedSpotIds ?? []),
+    );
+  } catch (err) {
+    if (err instanceof BoardLoadError) {
+      return NextResponse.json({ error: err.message }, { status: 503 });
+    }
+    throw err;
+  }
 }
 
 export async function POST(request: Request) {
@@ -127,6 +134,9 @@ export async function POST(request: Request) {
         "Bid is live on the board. Pay to lock only if you are the current leader on this spot.",
     });
   } catch (err) {
+    if (err instanceof BoardLoadError) {
+      return NextResponse.json({ error: err.message }, { status: 503 });
+    }
     const message =
       err instanceof Error ? err.message : "Could not save bid. Try again.";
     return NextResponse.json({ error: message }, { status: 500 });

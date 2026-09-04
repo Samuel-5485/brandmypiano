@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { CONFIG } from "@/config";
+import { CONFIG, getAuctionEnd } from "@/config";
 import { money } from "@/lib/auction";
 import type { PublicBoard, SpotPublicState } from "@/lib/types";
 import { BidModal } from "@/components/BidModal";
@@ -12,11 +12,13 @@ import { StickerMockup } from "@/components/StickerMockup";
 import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 
 type Props = {
-  initialBoard: PublicBoard;
+  initialBoard?: PublicBoard;
+  boardUnavailable?: boolean;
 };
 
-export function AuctionApp({ initialBoard }: Props) {
-  const [board, setBoard] = useState(initialBoard);
+export function AuctionApp({ initialBoard, boardUnavailable = false }: Props) {
+  const [board, setBoard] = useState<PublicBoard | null>(initialBoard ?? null);
+  const [unavailable, setUnavailable] = useState(boardUnavailable);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [prefillAmount, setPrefillAmount] = useState<number | null>(null);
@@ -24,11 +26,16 @@ export function AuctionApp({ initialBoard }: Props) {
   const refresh = useCallback(async () => {
     try {
       const res = await fetch("/api/bids", { cache: "no-store" });
+      if (res.status === 503) {
+        setUnavailable(true);
+        return;
+      }
       if (!res.ok) return;
       const data = (await res.json()) as PublicBoard;
       setBoard(data);
+      setUnavailable(false);
     } catch {
-      // keep last good board
+      setUnavailable(true);
     }
   }, []);
 
@@ -38,15 +45,16 @@ export function AuctionApp({ initialBoard }: Props) {
   }, [refresh]);
 
   const activeSpot: SpotPublicState | null = useMemo(() => {
-    if (selectedId == null) return null;
+    if (selectedId == null || !board) return null;
     return board.spots.find((s) => s.spotId === selectedId) ?? null;
-  }, [selectedId, board.spots]);
+  }, [selectedId, board]);
 
   function selectSpot(id: number) {
     setSelectedId(id);
   }
 
   function openBidModal(id: number, amount?: number) {
+    if (unavailable) return;
     setSelectedId(id);
     setPrefillAmount(amount ?? null);
     setModalOpen(true);
@@ -57,7 +65,7 @@ export function AuctionApp({ initialBoard }: Props) {
     setPrefillAmount(null);
   }
 
-  const progressWidth = `${Math.min(100, board.percent)}%`;
+  const progressWidth = board ? `${Math.min(100, board.percent)}%` : "0%";
 
   return (
     <>
@@ -91,12 +99,27 @@ export function AuctionApp({ initialBoard }: Props) {
             {CONFIG.heroLede}
           </p>
 
+          {unavailable && (
+            <div
+              className="mt-6 rounded-xl border border-gold/40 bg-gold/10 px-4 py-3 text-sm text-cream"
+              role="alert"
+            >
+              Board can&apos;t load. Bid data is temporarily unavailable — not an empty
+              auction. Try again in a moment.
+            </div>
+          )}
+
           <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
             {[
-              { label: "Raised", value: money(board.raised) },
-              { label: "Goal", value: money(board.goal) },
-              { label: "Spots with a bid", value: `${board.spotsWithBid}/${CONFIG.spots.length}` },
-              { label: "Funded", value: `${board.percent}%` },
+              { label: "Raised", value: board ? money(board.raised) : "—" },
+              { label: "Goal", value: board ? money(board.goal) : money(CONFIG.goal) },
+              {
+                label: "Spots with a bid",
+                value: board
+                  ? `${board.spotsWithBid}/${CONFIG.spots.length}`
+                  : "—",
+              },
+              { label: "Funded", value: board ? `${board.percent}%` : "—" },
             ].map((stat) => (
               <div key={stat.label} className="card-surface rounded-xl p-4">
                 <p className="text-[11px] uppercase tracking-[0.16em] text-dim">
@@ -111,13 +134,13 @@ export function AuctionApp({ initialBoard }: Props) {
 
           <div className="mt-6 card-surface rounded-xl p-4 sm:p-5">
             <div className="mb-2 flex items-center justify-between text-sm text-dim">
-              <span>Progress to {money(board.goal)}</span>
-              <span>{board.percent}%</span>
+              <span>Progress to {board ? money(board.goal) : money(CONFIG.goal)}</span>
+              <span>{board ? `${board.percent}%` : "—"}</span>
             </div>
             <div
               className="h-3 overflow-hidden rounded-full bg-bg"
               role="progressbar"
-              aria-valuenow={board.percent}
+              aria-valuenow={board?.percent ?? 0}
               aria-valuemin={0}
               aria-valuemax={100}
               aria-label="Fundraising progress"
@@ -128,11 +151,13 @@ export function AuctionApp({ initialBoard }: Props) {
               />
             </div>
             <div className="mt-5">
-              <Countdown endsAt={board.auctionEnd} />
+              <Countdown endsAt={board?.auctionEnd ?? getAuctionEnd()} />
             </div>
           </div>
         </section>
 
+        {!unavailable && board && (
+          <>
         <section className="mx-auto max-w-5xl px-4 py-6 sm:px-6" id="piano">
           <PianoGraphic
             activeId={selectedId}
@@ -150,6 +175,8 @@ export function AuctionApp({ initialBoard }: Props) {
           onSelectSpot={selectSpot}
           onBidSpot={openBidModal}
         />
+          </>
+        )}
 
         <section className="mx-auto max-w-5xl px-4 py-12 sm:px-6">
           <h2 className="font-display text-3xl text-cream">How it works</h2>
@@ -191,7 +218,11 @@ export function AuctionApp({ initialBoard }: Props) {
               How the sticker sits
             </h3>
             <div className="mt-5">
-              <StickerMockup spots={board.spots} />
+              {board ? (
+                <StickerMockup spots={board.spots} />
+              ) : (
+                <p className="text-sm text-dim">Sticker preview unavailable.</p>
+              )}
             </div>
           </div>
         </section>
@@ -282,9 +313,9 @@ export function AuctionApp({ initialBoard }: Props) {
 
       <BidModal
         spot={activeSpot}
-        open={modalOpen}
-        ended={board.ended}
-        paymentLink={board.paymentLink}
+        open={modalOpen && !unavailable}
+        ended={board?.ended ?? false}
+        paymentLink={board?.paymentLink ?? ""}
         prefillAmount={prefillAmount}
         onClose={closeBidModal}
         onSubmitted={refresh}

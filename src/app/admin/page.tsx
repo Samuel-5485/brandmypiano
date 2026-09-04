@@ -264,8 +264,13 @@ export default function AdminPage() {
         busy={busy}
         onConfirmPayment={(id) => act({ action: "confirm_payment", id })}
         onRefund={(id) => act({ action: "refund", id })}
+        onRefundNeeded={(id) => act({ action: "refund_needed", id })}
         onLockSpot={(id) => act({ action: "lock_spot", id })}
         onReject={(id) => act({ action: "reject", id })}
+        onDelete={(id) => {
+          if (!window.confirm("Delete this bid row permanently?")) return;
+          act({ action: "delete", id });
+        }}
         onUpdate={(id, patch) => act({ action: "update", id, ...patch })}
       />
     </main>
@@ -280,8 +285,10 @@ function BidTable({
   busy,
   onConfirmPayment,
   onRefund,
+  onRefundNeeded,
   onLockSpot,
   onReject,
+  onDelete,
   onUpdate,
 }: {
   title: string;
@@ -291,8 +298,10 @@ function BidTable({
   busy: boolean;
   onConfirmPayment: (id: string) => void;
   onRefund: (id: string) => void;
+  onRefundNeeded: (id: string) => void;
   onLockSpot: (id: string) => void;
   onReject: (id: string) => void;
+  onDelete: (id: string) => void;
   onUpdate: (id: string, patch: Record<string, unknown>) => void;
 }) {
   return (
@@ -349,6 +358,9 @@ function BidTable({
                       Refunded {new Date(bid.refundedAt).toLocaleString()}
                     </div>
                   )}
+                  {bid.refundNeeded && !bid.refundedAt && (
+                    <div className="mt-1 text-xs text-gold">Refund needed</div>
+                  )}
                 </td>
                 <td className="px-3 py-3">
                   <AdminLogoField
@@ -398,14 +410,24 @@ function BidTable({
                         Confirm payment
                       </button>
                     )}
-                    {paymentStatus === "beaten" && (
+                    {paymentStatus === "beaten" && !bid.refundNeeded && (
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => onRefundNeeded(bid.id)}
+                        className="text-left text-gold hover:text-gold-hover"
+                      >
+                        Mark refund needed
+                      </button>
+                    )}
+                    {paymentStatus === "beaten" && bid.refundNeeded && (
                       <button
                         type="button"
                         disabled={busy}
                         onClick={() => onRefund(bid.id)}
                         className="text-left text-dim hover:text-cream"
                       >
-                        Refund this bid
+                        Mark refunded
                       </button>
                     )}
                     {paymentStatus === "leading" && bid.paidAt && (
@@ -428,6 +450,14 @@ function BidTable({
                         Reject
                       </button>
                     )}
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => onDelete(bid.id)}
+                      className="text-left text-red-300/80 hover:text-red-200"
+                    >
+                      Delete
+                    </button>
                     <input
                       defaultValue={bid.handle}
                       className="focus-ring mt-1 w-28 rounded border border-line bg-bg px-2 py-1 text-xs text-cream"
