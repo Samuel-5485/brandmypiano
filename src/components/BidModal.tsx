@@ -14,8 +14,41 @@ type Props = {
   paymentLink: string;
   prefillAmount?: number | null;
   onClose: () => void;
-  onSubmitted: () => void;
+  onSubmitted: () => void | Promise<void>;
 };
+
+function logoUrlHint(logoUrl: string, logoFile: File | null) {
+  if (logoFile) {
+    return { text: "Using the uploaded file.", tone: "dim" as const, preview: null };
+  }
+  const value = logoUrl.trim();
+  if (!value) {
+    return {
+      text: "Optional. Upload a file or paste an https:// image.",
+      tone: "dim" as const,
+      preview: null,
+    };
+  }
+  if (value.startsWith("data:")) {
+    return {
+      text: "Use Choose file or an https:// link, not pasted image code.",
+      tone: "error" as const,
+      preview: null,
+    };
+  }
+  if (value.startsWith("https://")) {
+    return {
+      text: "We'll use this logo.",
+      tone: "ok" as const,
+      preview: value,
+    };
+  }
+  return {
+    text: "Logo URL must start with https://",
+    tone: "error" as const,
+    preview: null,
+  };
+}
 
 export function BidModal({
   spot,
@@ -36,7 +69,6 @@ export function BidModal({
   const [logoFileName, setLogoFileName] = useState("");
   const [amount, setAmount] = useState("");
   const [error, setError] = useState("");
-  const [warning, setWarning] = useState("");
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState<{
     amount: number;
@@ -70,11 +102,8 @@ export function BidModal({
     setLogoUrl("");
     setLogoFile(null);
     setLogoFileName("");
-    setAmount(
-      String(prefillAmount ?? currentSpot?.minNextBid ?? ""),
-    );
+    setAmount(String(prefillAmount ?? currentSpot?.minNextBid ?? ""));
     setError("");
-    setWarning("");
     setDone(null);
     setBusy(false);
   }, [open, spotId, prefillAmount]);
@@ -105,6 +134,7 @@ export function BidModal({
     done?.isLeader && paymentLink && done.amount > 0
       ? lockPaymentUrl(paymentLink, done.amount)
       : "";
+  const logoHint = logoUrlHint(logoUrl, logoFile);
 
   function onLogoFile(file: File | null) {
     if (!file) {
@@ -149,7 +179,6 @@ export function BidModal({
       localStorage.setItem(HANDLE_KEY, normalizedHandle);
     }
     setError("");
-    setWarning("");
     await onSubmitted();
     onClose();
   }
@@ -169,92 +198,41 @@ export function BidModal({
       setError("Use Choose file or an https:// URL — not a pasted base64 image.");
       return;
     }
+    if (trimmedLogoUrl && !trimmedLogoUrl.startsWith("https://")) {
+      setError("Logo URL must start with https://");
+      return;
+    }
+
     setBusy(true);
     setError("");
-    setWarning("");
     try {
-      let res: Response;
-      if (logoFile) {
-        const body = new FormData();
-        body.append("spotId", String(spot!.spotId));
-        body.append("brandName", brandName);
-        body.append("handle", normalizedHandle);
-        body.append("website", website);
-        body.append("amount", String(amount));
-        body.append("file", logoFile);
-        res = await fetch("/api/bids", { method: "POST", body });
-      } else {
-        res = await fetch("/api/bids", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            spotId: spot!.spotId,
-            brandName,
-            handle: normalizedHandle,
-            website,
-            logoUrl: trimmedLogoUrl,
-            amount: Number(amount),
-          }),
-        });
-      }
+      const formData = new FormData();
+      formData.append("spotId", String(spot!.spotId));
+      formData.append("brandName", brandName);
+      formData.append("handle", normalizedHandle);
+      formData.append("website", website);
+      formData.append("amount", String(amount));
+      if (trimmedLogoUrl) formData.append("logoUrl", trimmedLogoUrl);
+      if (logoFile) formData.append("file", logoFile);
 
+      const res = await fetch("/api/bids", { method: "POST", body: formData });
       const text = await res.text();
       const bidAmount = Number(amount);
 
       if (!text.trim()) {
         if (res.ok) {
-          const visible = await bidVisibleOnBoard(
-            spot!.spotId,
-            normalizedHandle,
-            bidAmount,
-          );
-          if (visible) {
-            await finishSuccess();
-            return;
-          }
+          await finishSuccess();
+          return;
         }
-        setError(
-          res.ok
-            ? "Server returned empty answer."
-            : `Could not save bid (HTTP ${res.status}).`,
-        );
+        setError(`Could not save bid (HTTP ${res.status}).`);
         return;
       }
 
-      let data: {
-        ok?: boolean;
-        error?: string;
-        warning?: string;
-        bid?: { spotId: number; amount: number; brandName: string };
-      };
+      let data: { ok?: boolean; error?: string; bid?: unknown };
       try {
         data = JSON.parse(text) as typeof data;
       } catch {
-        if (res.ok) {
-          const visible = await bidVisibleOnBoard(
-            spot!.spotId,
-            normalizedHandle,
-            bidAmount,
-          );
-          if (visible) {
-            await finishSuccess();
-            return;
-          }
-        }
-        setError(
-          res.ok
-            ? "Unexpected server response."
-            : `Could not save bid (HTTP ${res.status}).`,
-        );
-        return;
-      }
-
-      if (data.ok === false || !res.ok) {
-        setError(data.error || "Could not save bid.");
-        return;
-      }
-
-      if (!data.bid) {
+        await onSubmitted();
         const visible = await bidVisibleOnBoard(
           spot!.spotId,
           normalizedHandle,
@@ -268,8 +246,31 @@ export function BidModal({
         return;
       }
 
+      if (data.ok === false || !res.ok) {
+        const visible = await bidVisibleOnBoard(
+          spot!.spotId,
+          normalizedHandle,
+          bidAmount,
+        );
+        if (visible) {
+          await finishSuccess();
+          return;
+        }
+        setError(data.error || "Could not save bid.");
+        return;
+      }
+
       await finishSuccess();
     } catch {
+      const visible = await bidVisibleOnBoard(
+        spot!.spotId,
+        normalizedHandle,
+        Number(amount),
+      );
+      if (visible) {
+        await finishSuccess();
+        return;
+      }
       setError("Network error. Try again.");
     } finally {
       setBusy(false);
@@ -341,11 +342,6 @@ export function BidModal({
               Your bid is live on spot {done.spotId} — {money(done.amount)} for{" "}
               {done.brandName}.
             </p>
-            {warning && (
-              <p className="rounded-md border border-gold/40 bg-gold/10 px-3 py-2 text-gold">
-                {warning}
-              </p>
-            )}
             {done.isLeader ? (
               <>
                 <p>
@@ -451,20 +447,37 @@ export function BidModal({
               <input
                 value={logoUrl}
                 onChange={(e) => {
-                  const next = e.target.value;
-                  if (next.trim().startsWith("data:")) {
-                    setError("Use Choose file or an https:// URL — not base64.");
-                    return;
-                  }
-                  setError("");
-                  setLogoUrl(next);
+                  setLogoUrl(e.target.value);
                   setLogoFile(null);
                   setLogoFileName("");
+                  setError("");
                 }}
                 className="focus-ring w-full rounded-md border border-line bg-bg px-3 py-3 text-cream"
                 placeholder="https://…/logo.png"
-                disabled={ended || busy || spot.locked}
+                disabled={ended || busy || spot.locked || Boolean(logoFile)}
               />
+              <p
+                className={
+                  logoHint.tone === "error"
+                    ? "mt-1.5 text-xs text-red-200"
+                    : logoHint.tone === "ok"
+                      ? "mt-1.5 text-xs text-gold/90"
+                      : "mt-1.5 text-xs text-dim"
+                }
+              >
+                {logoHint.text}
+              </p>
+              {logoHint.preview && (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img
+                  src={logoHint.preview}
+                  alt=""
+                  className="mt-2 h-10 w-10 rounded border border-line object-contain bg-bg"
+                  onError={(e) => {
+                    e.currentTarget.style.display = "none";
+                  }}
+                />
+              )}
             </label>
             <label className="block text-sm">
               <span className="mb-1.5 block text-dim">Or upload a logo (optional)</span>
@@ -476,9 +489,7 @@ export function BidModal({
                 onChange={(e) => onLogoFile(e.target.files?.[0] ?? null)}
               />
               {logoFileName && (
-                <span className="mt-1.5 block text-xs text-dim">
-                  Uploaded: {logoFileName}
-                </span>
+                <span className="mt-1.5 block text-xs text-dim">{logoFileName}</span>
               )}
             </label>
             <label className="block text-sm">

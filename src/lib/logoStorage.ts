@@ -57,40 +57,10 @@ export async function uploadLogoBuffer(
 
   try {
     const url = await uploadLogo(logoObjectName(contentType), buffer, contentType);
-    // #region agent log
-    fetch("http://127.0.0.1:7681/ingest/d8bbfca4-00dd-492f-ae23-8c4a307aedad", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "c3e306" },
-      body: JSON.stringify({
-        sessionId: "c3e306",
-        runId: "logo-upload",
-        hypothesisId: "H3",
-        location: "logoStorage.ts:uploadLogoBuffer",
-        message: "logo upload ok",
-        data: { bytes: buffer.length, contentType },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
     return { ok: true, url };
   } catch (err) {
     const raw = err instanceof Error ? err.message : String(err);
     const error = parseSupabaseError(raw, "Logo upload failed.");
-    // #region agent log
-    fetch("http://127.0.0.1:7681/ingest/d8bbfca4-00dd-492f-ae23-8c4a307aedad", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "c3e306" },
-      body: JSON.stringify({
-        sessionId: "c3e306",
-        runId: "logo-upload",
-        hypothesisId: "H1-H2",
-        location: "logoStorage.ts:uploadLogoBuffer",
-        message: "logo upload failed",
-        data: { error, rawPreview: raw.slice(0, 200) },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
     return { ok: false, error };
   }
 }
@@ -110,7 +80,7 @@ export async function resolveLogoForBid(input: {
   const logoUrl = String(input.logoUrl ?? "").trim();
   if (!logoUrl) return { url: null };
 
-  if (/^https?:\/\//i.test(logoUrl)) {
+  if (/^https:\/\//i.test(logoUrl)) {
     return { url: logoUrl };
   }
 

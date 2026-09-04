@@ -1,3 +1,4 @@
+import { NextResponse } from "next/server";
 import { getSpot } from "@/config";
 import {
   auctionEnded,
@@ -6,13 +7,22 @@ import {
   normalizeHandle,
   validateNewBidAmount,
 } from "@/lib/auction";
-import { apiError, apiOk } from "@/lib/apiResponse";
 import { resolveLogoForBid } from "@/lib/logoStorage";
 import { BoardLoadError, newBidId, readAuctionFile, withAuctionLock } from "@/lib/store";
 import type { Bid } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+
+const JSON_HEADERS = { "Content-Type": "application/json; charset=utf-8" };
+
+function jsonOk(body: Record<string, unknown>, status = 200) {
+  return NextResponse.json(body, { status, headers: JSON_HEADERS });
+}
+
+function jsonErr(error: string, status = 400) {
+  return NextResponse.json({ ok: false, error }, { status, headers: JSON_HEADERS });
+}
 
 type BidBody = {
   spotId?: number;
@@ -53,30 +63,36 @@ async function parseBidRequest(request: Request): Promise<{
   }
 }
 
+function slimBid(bid: Bid) {
+  return {
+    id: bid.id,
+    spotId: bid.spotId,
+    brandName: bid.brandName,
+    handle: bid.handle,
+    amount: bid.amount,
+    logoUrl: bid.logoUrl ?? null,
+  };
+}
+
 export async function GET() {
   try {
     const file = await readAuctionFile();
-    return apiOk(
-      buildPublicBoard(file.bids, file.lockedSpotIds ?? []) as unknown as Record<
-        string,
-        unknown
-      >,
-    );
+    return jsonOk({
+      ok: true,
+      ...buildPublicBoard(file.bids, file.lockedSpotIds ?? []),
+    });
   } catch (err) {
     if (err instanceof BoardLoadError) {
-      return apiError(err.message, 503);
+      return jsonErr(err.message, 503);
     }
-    return apiError(
-      err instanceof Error ? err.message : "Could not load board.",
-      500,
-    );
+    return jsonErr(err instanceof Error ? err.message : "Could not load board.", 500);
   }
 }
 
 export async function POST(request: Request) {
   try {
     if (auctionEnded()) {
-      return apiError("The auction has ended. No new bids are accepted.", 403);
+      return jsonErr("The auction has ended. No new bids are accepted.", 403);
     }
 
     let body: BidBody;
@@ -84,69 +100,45 @@ export async function POST(request: Request) {
     try {
       ({ body, file } = await parseBidRequest(request));
     } catch (err) {
-      return apiError(
-        err instanceof Error ? err.message : "Invalid request body.",
-        400,
-      );
+      return jsonErr(err instanceof Error ? err.message : "Invalid request body.", 400);
     }
 
     const spotId = Number(body.spotId);
     const spot = getSpot(spotId);
     if (!spot) {
-      return apiError("Unknown spot.", 400);
+      return jsonErr("Unknown spot.", 400);
     }
 
     const brandName = String(body.brandName ?? "").trim();
     const handle = normalizeHandle(String(body.handle ?? ""));
     const website = String(body.website ?? "").trim();
     const amount = Number(body.amount);
+    const logoUrlInput = String(body.logoUrl ?? "").trim();
 
     if (brandName.length < 2) {
-      return apiError("Brand name must be at least 2 characters.", 400);
+      return jsonErr("Brand name must be at least 2 characters.", 400);
     }
     if (handle.length < 2) {
-      return apiError("Add your X handle so I can reach you.", 400);
+      return jsonErr("Add your X handle so I can reach you.", 400);
     }
     if (website && !/^https?:\/\//i.test(website)) {
-      return apiError("Website must start with http:// or https://.", 400);
+      return jsonErr("Website must start with http:// or https://.", 400);
     }
-
-    const logoUrlInput = String(body.logoUrl ?? "").trim();
     if (logoUrlInput.startsWith("data:")) {
-      return apiError(
+      return jsonErr(
         "Logo URL cannot be base64 data. Use Choose file or an https:// URL.",
         400,
       );
     }
+    if (logoUrlInput && !/^https:\/\//i.test(logoUrlInput) && !logoUrlInput.startsWith("/logos/")) {
+      return jsonErr("Logo URL must start with https://", 400);
+    }
 
-    const logo = await resolveLogoForBid({
-      logoUrl: logoUrlInput,
-      file,
-    });
+    const logo = await resolveLogoForBid({ logoUrl: logoUrlInput, file });
 
-    // #region agent log
-    fetch("http://127.0.0.1:7681/ingest/d8bbfca4-00dd-492f-ae23-8c4a307aedad", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "c3e306" },
-      body: JSON.stringify({
-        sessionId: "c3e306",
-        runId: "bid-post",
-        hypothesisId: "H4",
-        location: "api/bids/route.ts:POST",
-        message: "logo resolved for bid",
-        data: {
-          hadFile: Boolean(file),
-          logoUrlSet: Boolean(logo.url),
-          warning: logo.warning ?? null,
-        },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
-
-    const outcome = await withAuctionLock(async (file) => {
-      const locked = file.lockedSpotIds ?? [];
-      const err = validateNewBidAmount(file.bids, spotId, amount, locked);
+    const outcome = await withAuctionLock(async (auctionFile) => {
+      const locked = auctionFile.lockedSpotIds ?? [];
+      const err = validateNewBidAmount(auctionFile.bids, spotId, amount, locked);
       if (err) return { error: err };
 
       const now = new Date().toISOString();
@@ -165,69 +157,28 @@ export async function POST(request: Request) {
       };
       return {
         result: bid,
-        file: { ...file, bids: [...file.bids, bid] },
+        file: { ...auctionFile, bids: [...auctionFile.bids, bid] },
       };
     });
 
     if ("error" in outcome) {
-      return apiError(outcome.error, 400);
+      return jsonErr(outcome.error, 400);
     }
 
     const savedBid = outcome.result;
     if (!savedBid) {
-      return apiError("Could not save bid.", 500);
+      return jsonErr("Could not save bid.", 500);
     }
 
-    const payload = {
-      bid: {
-        id: savedBid.id,
-        spotId: savedBid.spotId,
-        brandName: savedBid.brandName,
-        handle: savedBid.handle,
-        amount: savedBid.amount,
-        logoUrl: savedBid.logoUrl ?? null,
-      },
+    return jsonOk({
+      ok: true,
+      bid: slimBid(savedBid),
       ...(logo.warning ? { warning: logo.warning } : {}),
-    };
-
-    // #region agent log
-    fetch("http://127.0.0.1:7681/ingest/d8bbfca4-00dd-492f-ae23-8c4a307aedad", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "c3e306" },
-      body: JSON.stringify({
-        sessionId: "c3e306",
-        runId: "bid-post",
-        hypothesisId: "H6",
-        location: "api/bids/route.ts:POST:success",
-        message: "bid saved slim response",
-        data: { bidId: savedBid.id, payloadBytes: JSON.stringify(payload).length },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
-
-    return apiOk(payload);
+    });
   } catch (err) {
     if (err instanceof BoardLoadError) {
-      return apiError(err.message, 503);
+      return jsonErr(err.message, 503);
     }
-    const message =
-      err instanceof Error ? err.message : "Could not save bid. Try again.";
-    // #region agent log
-    fetch("http://127.0.0.1:7681/ingest/d8bbfca4-00dd-492f-ae23-8c4a307aedad", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "c3e306" },
-      body: JSON.stringify({
-        sessionId: "c3e306",
-        runId: "bid-post",
-        hypothesisId: "H5",
-        location: "api/bids/route.ts:POST:catch",
-        message: "bid save failed",
-        data: { error: message },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
-    return apiError(message, 500);
+    return jsonErr(err instanceof Error ? err.message : String(err), 500);
   }
 }
