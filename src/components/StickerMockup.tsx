@@ -1,22 +1,63 @@
 "use client";
 
 import { BrandLogo } from "@/components/BrandLogo";
+import {
+  quadBounds,
+  quadHomographyMatrix3d,
+  STICKER_PLATE_QUADS,
+} from "@/lib/stickerPlate";
 import type { SpotPublicState } from "@/lib/types";
 
 type Props = {
   spots: SpotPublicState[];
 };
 
-/** Cream plate boxes on public/e383-sticker.jpg */
-export const PLATE_BOXES = {
-  1: { left: "17%", top: "15%", width: "53%", height: "40%" },
-  2: { left: "37%", top: "63%", width: "30%", height: "15%" },
-} as const;
+export { STICKER_PLATE_ASPECT, PLATE_BOXES } from "@/lib/stickerPlate";
 
-export const STICKER_PLATE_ASPECT = {
-  1: { width: 220, height: 166 },
-  2: { width: 180, height: 90 },
-} as const;
+function PlateLogoWarp({
+  spotId,
+  spot,
+  mediaClassName,
+}: {
+  spotId: 1 | 2;
+  spot: SpotPublicState;
+  mediaClassName: string;
+}) {
+  const quad = STICKER_PLATE_QUADS[spotId];
+  const bounds = quadBounds(quad);
+  const matrix = quadHomographyMatrix3d(quad, bounds);
+
+  return (
+    <div
+      className="pointer-events-none absolute overflow-hidden"
+      style={{
+        left: `${bounds.minX}%`,
+        top: `${bounds.minY}%`,
+        width: `${bounds.w}%`,
+        height: `${bounds.h}%`,
+      }}
+    >
+      <div
+        className="absolute left-0 top-0 h-full w-full origin-top-left bg-transparent"
+        style={{
+          transform: matrix,
+          transformOrigin: "0 0",
+        }}
+      >
+        <div className="relative h-full w-full overflow-hidden bg-transparent">
+          <BrandLogo
+            brandName={spot.holderBrand!}
+            logoUrl={spot.holderLogoUrl}
+            knockoutWhite={!spot.holderKeepBackground}
+            plateFill
+            className="bg-transparent"
+            mediaClassName={mediaClassName}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export function StickerMockup({ spots }: Props) {
   const spot1 = spots.find((s) => s.spotId === 1);
@@ -34,33 +75,19 @@ export function StickerMockup({ spots }: Props) {
         />
 
         {spot1?.hasBid && spot1.holderBrand ? (
-          <div
-            className="pointer-events-none absolute overflow-hidden rounded-md"
-            style={PLATE_BOXES[1]}
-          >
-            <BrandLogo
-              brandName={spot1.holderBrand}
-              logoUrl={spot1.holderLogoUrl}
-              knockoutWhite={!spot1.holderKeepBackground}
-              plateFill
-              mediaClassName="text-base sm:text-lg"
-            />
-          </div>
+          <PlateLogoWarp
+            spotId={1}
+            spot={spot1}
+            mediaClassName="text-base sm:text-lg"
+          />
         ) : null}
 
         {spot2?.hasBid && spot2.holderBrand ? (
-          <div
-            className="pointer-events-none absolute overflow-hidden rounded-sm"
-            style={PLATE_BOXES[2]}
-          >
-            <BrandLogo
-              brandName={spot2.holderBrand}
-              logoUrl={spot2.holderLogoUrl}
-              knockoutWhite={!spot2.holderKeepBackground}
-              plateFill
-              mediaClassName="text-[10px] sm:text-xs"
-            />
-          </div>
+          <PlateLogoWarp
+            spotId={2}
+            spot={spot2}
+            mediaClassName="text-[10px] sm:text-xs"
+          />
         ) : null}
       </div>
       <p className="mt-3 max-w-2xl text-sm leading-relaxed text-dim sm:text-base">

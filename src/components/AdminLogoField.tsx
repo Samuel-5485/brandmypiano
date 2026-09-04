@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { BrandLogo, STICKER_LOGO_SLOT } from "@/components/BrandLogo";
-import { STICKER_PLATE_ASPECT } from "@/components/StickerMockup";
+import { STICKER_PLATE_ASPECT } from "@/lib/stickerPlate";
 
 type Props = {
   spotId: number;

@@ -96,7 +96,7 @@ export function BrandLogo({
   }, [logoUrl, knockoutWhite]);
 
   const plateImgClass =
-    "box-border h-full w-full bg-transparent object-contain p-[10%]";
+    "box-border h-full w-full bg-transparent object-contain p-[12%]";
 
   if (plateFill) {
     if (logoUrl && !failed) {
@@ -115,7 +115,7 @@ export function BrandLogo({
     }
     return (
       <span
-        className={`box-border flex h-full w-full items-center justify-center bg-transparent p-[10%] font-semibold ${className}`}
+        className={`box-border flex h-full w-full items-center justify-center bg-transparent p-[12%] font-semibold ${className}`}
         aria-label={label}
         role="img"
       >
