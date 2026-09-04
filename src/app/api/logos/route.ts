@@ -52,7 +52,7 @@ export async function POST(request: Request) {
   try {
     if (hasBlobToken()) {
       const blob = await put(`brandmypiano/logos/${name}`, buffer, {
-        access: "private",
+        access: "public",
         contentType: file.type,
         addRandomSuffix: false,
       });
