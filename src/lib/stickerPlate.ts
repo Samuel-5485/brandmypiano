@@ -41,60 +41,116 @@ export function quadClipPath(q: PlateQuadDef): string {
   return `polygon(${tl.x}% ${tl.y}%, ${tr.x}% ${tr.y}%, ${br.x}% ${br.y}%, ${bl.x}% ${bl.y}%)`;
 }
 
-/**
- * Map unit square → quad in 0–1 image space. For a layer sized to the full photo.
- * Corner order: tl, tr, br, bl.
- */
-export function squareToQuadMatrix3d(
-  x0: number,
-  y0: number,
-  x1: number,
-  y1: number,
-  x2: number,
-  y2: number,
-  x3: number,
-  y3: number,
-): string {
-  const dx1 = x1 - x2;
-  const dy1 = y1 - y2;
-  const dx2 = x3 - x2;
-  const dy2 = y3 - y2;
-  const dx3 = x0 - x1 + x2 - x3;
-  const dy3 = y0 - y1 + y2 - y3;
-  const denom = dx1 * dy2 - dx2 * dy1;
-  let g = 0;
-  let h = 0;
-  if (Math.abs(denom) > 1e-8) {
-    g = (dx3 * dy2 - dx2 * dy3) / denom;
-    h = (dx1 * dy3 - dx3 * dy1) / denom;
+/** Convert percent quad corners to pixel coordinates for a measured photo size. */
+export function quadPercentToPixels(
+  q: PlateQuadDef,
+  photoW: number,
+  photoH: number,
+): PlateQuadDef {
+  const sx = (x: number) => (x / 100) * photoW;
+  const sy = (y: number) => (y / 100) * photoH;
+  return {
+    tl: { x: sx(q.tl.x), y: sy(q.tl.y) },
+    tr: { x: sx(q.tr.x), y: sy(q.tr.y) },
+    br: { x: sx(q.br.x), y: sy(q.br.y) },
+    bl: { x: sx(q.bl.x), y: sy(q.bl.y) },
+  };
+}
+
+function solveLinear8(A: number[][], b: number[]): number[] | null {
+  const n = 8;
+  const M = A.map((row, i) => [...row, b[i]!]);
+
+  for (let col = 0; col < n; col++) {
+    let pivot = col;
+    for (let row = col + 1; row < n; row++) {
+      if (Math.abs(M[row]![col]!) > Math.abs(M[pivot]![col]!)) pivot = row;
+    }
+    if (Math.abs(M[pivot]![col]!) < 1e-10) return null;
+    [M[col], M[pivot]] = [M[pivot]!, M[col]!];
+
+    for (let row = col + 1; row < n; row++) {
+      const factor = M[row]![col]! / M[col]![col]!;
+      for (let j = col; j <= n; j++) {
+        M[row]![j]! -= factor * M[col]![j]!;
+      }
+    }
   }
-  const a = x1 - x0 + g * x1;
-  const b = x3 - x0 + h * x3;
-  const c = x0;
-  const d = y1 - y0 + g * y1;
-  const e = y3 - y0 + h * y3;
-  const f = y0;
+
+  const x = new Array<number>(n);
+  for (let row = n - 1; row >= 0; row--) {
+    let sum = M[row]![n]!;
+    for (let col = row + 1; col < n; col++) sum -= M[row]![col]! * x[col]!;
+    x[row] = sum / M[row]![row]!;
+  }
+  return x;
+}
+
+/**
+ * Homography matrix3d mapping a logo rectangle (0,0)-(logoW,logoH) to a dest quad in pixels.
+ * Returns null when the system is singular / unstable.
+ */
+export function rectToQuadMatrix3d(
+  logoW: number,
+  logoH: number,
+  dest: PlateQuadDef,
+): string | null {
+  if (logoW <= 0 || logoH <= 0) return null;
+
+  const src: Pt[] = [
+    { x: 0, y: 0 },
+    { x: logoW, y: 0 },
+    { x: logoW, y: logoH },
+    { x: 0, y: logoH },
+  ];
+  const dst: Pt[] = [dest.tl, dest.tr, dest.br, dest.bl];
+
+  const A: number[][] = [];
+  const b: number[] = [];
+
+  for (let i = 0; i < 4; i++) {
+    const { x: sx, y: sy } = src[i]!;
+    const { x: dx, y: dy } = dst[i]!;
+    A.push([sx, sy, 1, 0, 0, 0, -sx * dx, -sy * dx]);
+    b.push(dx);
+    A.push([0, 0, 0, sx, sy, 1, -sx * dy, -sy * dy]);
+    b.push(dy);
+  }
+
+  const sol = solveLinear8(A, b);
+  if (!sol) return null;
+
+  const [a, bVal, c, d, e, f, g, h] = sol;
+  if (!sol.every((v) => Number.isFinite(v))) return null;
 
   return `matrix3d(${[
     a, d, 0, g,
-    b, e, 0, h,
+    bVal, e, 0, h,
     0, 0, 1, 0,
     c, f, 0, 1,
   ].join(",")})`;
 }
 
-/** Homography for a layer covering the full sticker image (inset-0). */
-export function quadHomographyMatrix3d(q: PlateQuadDef): string {
-  return squareToQuadMatrix3d(
-    q.tl.x / 100,
-    q.tl.y / 100,
-    q.tr.x / 100,
-    q.tr.y / 100,
-    q.br.x / 100,
-    q.br.y / 100,
-    q.bl.x / 100,
-    q.bl.y / 100,
-  );
+export function isMatrix3dStable(matrix: string | null): matrix is string {
+  if (!matrix) return false;
+  const nums = matrix
+    .replace(/^matrix3d\(/, "")
+    .replace(/\)$/, "")
+    .split(",")
+    .map(Number);
+  return nums.length === 16 && nums.every((n) => Number.isFinite(n));
+}
+
+/** Logo layer size in pixels — square matching the quad bbox (min side ≥ 1px). */
+export function logoLayerPixelSize(
+  qPercent: PlateQuadDef,
+  photoW: number,
+  photoH: number,
+): { logoW: number; logoH: number } {
+  const px = quadPercentToPixels(qPercent, photoW, photoH);
+  const { w, h } = quadBounds(px);
+  const side = Math.max(w, h, 1);
+  return { logoW: side, logoH: side };
 }
 
 /** @deprecated Use STICKER_PLATE_QUADS + quadClipPath for perspective plates. */
