@@ -3,11 +3,12 @@
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import { BrandLogo } from "@/components/BrandLogo";
 import {
-  centeredLogoLayerSize,
+  centeredSquareLogoLayer,
   isMatrix3dStable,
   quadClipPath,
   quadPercentToPixels,
   quadPlateHeight,
+  quadPlateWidth,
   rectToQuadMatrix3d,
   STICKER_PLATE_QUADS,
 } from "@/lib/stickerPlate";
@@ -19,10 +20,31 @@ type Props = {
 
 export { STICKER_PLATE_ASPECT, PLATE_BOXES } from "@/lib/stickerPlate";
 
-/** Spot 1 music rest — centered mark ~60% of plate height; spot 2 smaller plate. */
-const LOGO_HEIGHT_FRACTION: Record<1 | 2, number> = { 1: 0.6, 2: 0.58 };
+/** Square mark side = fraction of plate shorter edge. */
+const LOGO_SIDE_FRACTION: Record<1 | 2, number> = { 1: 0.58, 2: 0.55 };
 
 type PhotoMetrics = { w: number; h: number };
+
+/** Square tile wrapper — img never spans full plate width. */
+function SquareMarkLogo({
+  spot,
+  mediaClassName,
+}: {
+  spot: SpotPublicState;
+  mediaClassName: string;
+}) {
+  return (
+    <div className="flex h-full w-full items-center justify-center bg-transparent p-[6%]">
+      <BrandLogo
+        brandName={spot.holderBrand!}
+        logoUrl={spot.holderLogoUrl}
+        knockoutWhite={!spot.holderKeepBackground}
+        className="flex max-h-full max-w-full items-center justify-center bg-transparent"
+        mediaClassName={`block max-h-full max-w-full object-contain rounded-lg ${mediaClassName}`}
+      />
+    </div>
+  );
+}
 
 type WarpState =
   | { mode: "pending" }
@@ -56,12 +78,14 @@ function PlateLogoWarp({
 
     const { w, h } = metrics;
     const platePx = quadPercentToPixels(quadPercent, w, h);
-    const heightFraction = LOGO_HEIGHT_FRACTION[spotId];
-    const { logoW, logoH, innerQuad } = centeredLogoLayerSize(
+    const sideFraction = LOGO_SIDE_FRACTION[spotId];
+    const { logoW, logoH, innerQuad } = centeredSquareLogoLayer(
       platePx,
-      heightFraction,
+      sideFraction,
     );
     const matrix = rectToQuadMatrix3d(logoW, logoH, innerQuad);
+    const innerW = quadPlateWidth(innerQuad);
+    const innerH = quadPlateHeight(innerQuad);
 
     // #region agent log
     fetch("http://127.0.0.1:7681/ingest/d8bbfca4-00dd-492f-ae23-8c4a307aedad", {
@@ -73,21 +97,25 @@ function PlateLogoWarp({
       body: JSON.stringify({
         sessionId: "c3e306",
         location: "StickerMockup.tsx:warp",
-        message: "centered mark homography",
+        message: "square tile homography",
         data: {
           spotId,
           photoW: w,
           photoH: h,
-          plateHeight: quadPlateHeight(platePx),
-          markHeight: quadPlateHeight(innerQuad),
-          heightFraction,
+          plateW: quadPlateWidth(platePx),
+          plateH: quadPlateHeight(platePx),
+          shortSide: Math.min(quadPlateWidth(platePx), quadPlateHeight(platePx)),
+          innerW,
+          innerH,
+          innerAspect: innerW / innerH,
+          sideFraction,
           logoW,
           logoH,
           matrixStable: isMatrix3dStable(matrix),
         },
         timestamp: Date.now(),
-        hypothesisId: "H2-centered-letterbox",
-        runId: "post-fix-2",
+        hypothesisId: "H3-square-dest-quad",
+        runId: "post-fix-3",
       }),
     }).catch(() => {});
     // #endregion
@@ -113,20 +141,18 @@ function PlateLogoWarp({
         }}
       >
         <div
-          className="flex items-center justify-center bg-transparent"
+          className="flex items-center justify-center overflow-hidden rounded-lg bg-transparent"
           style={{
-            height: `${LOGO_HEIGHT_FRACTION[spotId] * 100}%`,
+            width: `${LOGO_SIDE_FRACTION[spotId] * 100}%`,
             aspectRatio: "1 / 1",
+            maxWidth: "58%",
             transform: "rotateX(10deg)",
             transformOrigin: "center center",
           }}
         >
-          <BrandLogo
-            brandName={spot.holderBrand!}
-            logoUrl={spot.holderLogoUrl}
-            knockoutWhite={!spot.holderKeepBackground}
-            className="flex h-full w-full items-center justify-center bg-transparent"
-            mediaClassName={`max-h-full max-w-full object-contain ${mediaClassName}`}
+          <SquareMarkLogo
+            spot={spot}
+            mediaClassName={mediaClassName}
           />
         </div>
       </div>
@@ -144,7 +170,7 @@ function PlateLogoWarp({
       }}
     >
       <div
-        className="absolute left-0 top-0 flex items-center justify-center bg-transparent"
+        className="absolute left-0 top-0 overflow-hidden rounded-lg bg-transparent"
         style={{
           width: warp.logoW,
           height: warp.logoH,
@@ -152,13 +178,7 @@ function PlateLogoWarp({
           transformOrigin: "0 0",
         }}
       >
-        <BrandLogo
-          brandName={spot.holderBrand!}
-          logoUrl={spot.holderLogoUrl}
-          knockoutWhite={!spot.holderKeepBackground}
-          className="flex h-full w-full items-center justify-center bg-transparent"
-          mediaClassName={`max-h-full max-w-full object-contain ${mediaClassName}`}
-        />
+        <SquareMarkLogo spot={spot} mediaClassName={mediaClassName} />
       </div>
     </div>
   );

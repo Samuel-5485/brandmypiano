@@ -73,26 +73,55 @@ export function quadPlateHeight(q: PlateQuadDef): number {
   return (dist(q.tl, q.bl) + dist(q.tr, q.br)) / 2;
 }
 
-/** Centered inner quad preserving plate perspective; height ≈ fraction of outer. */
-export function innerCenteredLogoQuad(
+/** Average horizontal edge length of a quad in pixels. */
+export function quadPlateWidth(q: PlateQuadDef): number {
+  return (dist(q.tl, q.tr) + dist(q.bl, q.br)) / 2;
+}
+
+/** Shorter of average width / height — used to size a square mark. */
+export function quadShortSide(q: PlateQuadDef): number {
+  return Math.min(quadPlateWidth(q), quadPlateHeight(q));
+}
+
+function parametricTangent(
   q: PlateQuadDef,
-  heightFraction = 0.6,
-): PlateQuadDef {
-  const outerH = quadPlateHeight(q);
-  const targetH = outerH * heightFraction;
+  u: number,
+  v: number,
+  du: number,
+  dv: number,
+): Pt {
+  const d = 0.001;
+  const pu = bilinearQuad(q, u + (du ? d : 0), v + (dv ? d : 0));
+  const mu = bilinearQuad(q, u - (du ? d : 0), v - (dv ? d : 0));
+  return { x: (pu.x - mu.x) / (2 * d), y: (pu.y - mu.y) / (2 * d) };
+}
 
-  let lo = 0;
-  let hi = 0.49;
-  for (let i = 0; i < 24; i++) {
-    const t = (lo + hi) / 2;
-    const inner = quadFromParametric(q, 0.5 - t, 0.5 - t, 0.5 + t, 0.5 + t);
-    const innerH = quadPlateHeight(inner);
-    if (innerH < targetH) lo = t;
-    else hi = t;
-  }
+/**
+ * Centered square on the plate surface (perspective-correct).
+ * u- and v-span differ so pixel width ≈ pixel height ≈ sideFraction × short side.
+ */
+export function innerCenteredSquareQuad(
+  q: PlateQuadDef,
+  sideFraction = 0.58,
+): { innerQuad: PlateQuadDef; markSize: number } {
+  const markSize = Math.max(quadShortSide(q) * sideFraction, 1);
+  const tanU = parametricTangent(q, 0.5, 0.5, 1, 0);
+  const tanV = parametricTangent(q, 0.5, 0.5, 0, 1);
+  const magU = Math.hypot(tanU.x, tanU.y);
+  const magV = Math.hypot(tanV.x, tanV.y);
 
-  const t = (lo + hi) / 2;
-  return quadFromParametric(q, 0.5 - t, 0.5 - t, 0.5 + t, 0.5 + t);
+  const halfU = magU > 1e-6 ? markSize / (2 * magU) : 0.2;
+  const halfV = magV > 1e-6 ? markSize / (2 * magV) : 0.2;
+
+  const innerQuad = quadFromParametric(
+    q,
+    0.5 - Math.min(halfU, 0.49),
+    0.5 - Math.min(halfV, 0.49),
+    0.5 + Math.min(halfU, 0.49),
+    0.5 + Math.min(halfV, 0.49),
+  );
+
+  return { innerQuad, markSize };
 }
 
 export function quadClipPath(q: PlateQuadDef): string {
@@ -200,14 +229,14 @@ export function isMatrix3dStable(matrix: string | null): matrix is string {
   return nums.length === 16 && nums.every((n) => Number.isFinite(n));
 }
 
-/** Square logo layer sized to a centered inner mark (~heightFraction of plate). */
-export function centeredLogoLayerSize(
+/** Square logo layer + perspective-correct dest quad on the plate. */
+export function centeredSquareLogoLayer(
   platePx: PlateQuadDef,
-  heightFraction = 0.6,
-): { logoW: number; logoH: number; innerQuad: PlateQuadDef } {
-  const innerQuad = innerCenteredLogoQuad(platePx, heightFraction);
-  const side = Math.max(quadPlateHeight(innerQuad), 1);
-  return { logoW: side, logoH: side, innerQuad };
+  sideFraction = 0.58,
+): { logoW: number; logoH: number; innerQuad: PlateQuadDef; markSize: number } {
+  const { innerQuad, markSize } = innerCenteredSquareQuad(platePx, sideFraction);
+  const side = Math.max(markSize, 1);
+  return { logoW: side, logoH: side, innerQuad, markSize: side };
 }
 
 /** @deprecated Use STICKER_PLATE_QUADS + quadClipPath for perspective plates. */
