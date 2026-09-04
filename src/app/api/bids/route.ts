@@ -173,15 +173,19 @@ export async function POST(request: Request) {
       return apiError(outcome.error, 400);
     }
 
-    const bid = outcome.result;
+    const savedBid = outcome.result;
+    if (!savedBid) {
+      return apiError("Could not save bid.", 500);
+    }
+
     const payload = {
       bid: {
-        id: bid.id,
-        spotId: bid.spotId,
-        brandName: bid.brandName,
-        handle: bid.handle,
-        amount: bid.amount,
-        logoUrl: bid.logoUrl ?? null,
+        id: savedBid.id,
+        spotId: savedBid.spotId,
+        brandName: savedBid.brandName,
+        handle: savedBid.handle,
+        amount: savedBid.amount,
+        logoUrl: savedBid.logoUrl ?? null,
       },
       ...(logo.warning ? { warning: logo.warning } : {}),
     };
@@ -196,7 +200,7 @@ export async function POST(request: Request) {
         hypothesisId: "H6",
         location: "api/bids/route.ts:POST:success",
         message: "bid saved slim response",
-        data: { bidId: bid.id, payloadBytes: JSON.stringify(payload).length },
+        data: { bidId: savedBid.id, payloadBytes: JSON.stringify(payload).length },
         timestamp: Date.now(),
       }),
     }).catch(() => {});
