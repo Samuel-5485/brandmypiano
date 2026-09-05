@@ -8,6 +8,7 @@ import {
   validateNewBidAmount,
 } from "@/lib/auction";
 import { BoardLoadError, newBidId, readAuctionFile, withAuctionLock } from "@/lib/store";
+import { uploadPublicBidLogo } from "@/lib/logoStorage";
 import type { Bid } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -31,21 +32,30 @@ type BidBody = {
   amount?: number;
 };
 
-async function parseBidRequest(request: Request): Promise<BidBody> {
+async function parseBidRequest(request: Request): Promise<{
+  body: BidBody;
+  file: File | null;
+}> {
   const contentType = request.headers.get("content-type") ?? "";
   if (contentType.includes("multipart/form-data")) {
     const form = await request.formData();
+    const rawFile = form.get("file");
+    const file = rawFile instanceof File && rawFile.size > 0 ? rawFile : null;
     return {
-      spotId: Number(form.get("spotId")),
-      brandName: String(form.get("brandName") ?? ""),
-      handle: String(form.get("handle") ?? ""),
-      website: String(form.get("website") ?? ""),
-      amount: Number(form.get("amount")),
+      body: {
+        spotId: Number(form.get("spotId")),
+        brandName: String(form.get("brandName") ?? ""),
+        handle: String(form.get("handle") ?? ""),
+        website: String(form.get("website") ?? ""),
+        amount: Number(form.get("amount")),
+      },
+      file,
     };
   }
 
   try {
-    return (await request.json()) as BidBody;
+    const body = (await request.json()) as BidBody;
+    return { body, file: null };
   } catch {
     throw new Error("Invalid JSON body.");
   }
@@ -84,8 +94,9 @@ export async function POST(request: Request) {
     }
 
     let body: BidBody;
+    let file: File | null;
     try {
-      body = await parseBidRequest(request);
+      ({ body, file } = await parseBidRequest(request));
     } catch (err) {
       return jsonErr(err instanceof Error ? err.message : "Invalid request body.", 400);
     }
@@ -111,6 +122,8 @@ export async function POST(request: Request) {
       return jsonErr("Website must start with http:// or https://.", 400);
     }
 
+    const logo = await uploadPublicBidLogo(file);
+
     const outcome = await withAuctionLock(async (auctionFile) => {
       const locked = auctionFile.lockedSpotIds ?? [];
       const err = validateNewBidAmount(auctionFile.bids, spotId, amount, locked);
@@ -123,6 +136,7 @@ export async function POST(request: Request) {
         brandName,
         handle,
         website,
+        logoUrl: logo.url ?? undefined,
         amount,
         deposit: calcDeposit(amount),
         status: "pending",
@@ -147,6 +161,7 @@ export async function POST(request: Request) {
     return jsonOk({
       ok: true,
       bid: slimBid(savedBid),
+      ...(logo.warning ? { warning: logo.warning } : {}),
     });
   } catch (err) {
     if (err instanceof BoardLoadError) {

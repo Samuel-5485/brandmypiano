@@ -7,6 +7,9 @@ import type { SpotPublicState } from "@/lib/types";
 import { PayToLockButton } from "@/components/PayToLockButton";
 
 const HANDLE_KEY = "brandmypiano-handle";
+const PUBLIC_LOGO_ACCEPT = "image/png,image/jpeg,image/svg+xml,.png,.jpg,.jpeg,.svg";
+const PUBLIC_LOGO_MAX_BYTES = 2 * 1024 * 1024;
+const PUBLIC_LOGO_TYPES = new Set(["image/png", "image/jpeg", "image/svg+xml"]);
 
 type Props = {
   spot: SpotPublicState | null;
@@ -32,6 +35,8 @@ export function BidModal({
   const [brandName, setBrandName] = useState("");
   const [handle, setHandle] = useState("");
   const [website, setWebsite] = useState("");
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoFileName, setLogoFileName] = useState("");
   const [amount, setAmount] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -64,6 +69,8 @@ export function BidModal({
     setBrandName("");
     setHandle(saved);
     setWebsite("");
+    setLogoFile(null);
+    setLogoFileName("");
     setAmount(String(prefillAmount ?? currentSpot?.minNextBid ?? ""));
     setError("");
     setDone(null);
@@ -96,6 +103,29 @@ export function BidModal({
     done?.isLeader && paymentLink && done.amount > 0
       ? lockPaymentUrl(paymentLink, done.amount)
       : "";
+
+  function onLogoFile(file: File | null) {
+    if (!file) {
+      setLogoFile(null);
+      setLogoFileName("");
+      return;
+    }
+    if (!PUBLIC_LOGO_TYPES.has(file.type || "image/png")) {
+      setError("Logo must be PNG, JPG, or SVG.");
+      setLogoFile(null);
+      setLogoFileName("");
+      return;
+    }
+    if (file.size > PUBLIC_LOGO_MAX_BYTES) {
+      setError("Logo must be under 2MB.");
+      setLogoFile(null);
+      setLogoFileName("");
+      return;
+    }
+    setError("");
+    setLogoFile(file);
+    setLogoFileName(file.name);
+  }
 
   async function bidVisibleOnBoard(
     targetSpotId: number,
@@ -180,17 +210,15 @@ export function BidModal({
     setBusy(true);
     setError("");
     try {
-      const res = await fetch("/api/bids", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          spotId: spot!.spotId,
-          brandName: brandName.trim(),
-          handle: normalizedHandle,
-          website: website.trim(),
-          amount: Number(amount),
-        }),
-      });
+      const formData = new FormData();
+      formData.append("spotId", String(spot!.spotId));
+      formData.append("brandName", brandName.trim());
+      formData.append("handle", normalizedHandle);
+      formData.append("website", website.trim());
+      formData.append("amount", String(amount));
+      if (logoFile) formData.append("file", logoFile);
+
+      const res = await fetch("/api/bids", { method: "POST", body: formData });
       const text = await res.text();
       const bidAmount = Number(amount);
 
@@ -416,8 +444,7 @@ export function BidModal({
             )}
             <p className="rounded-md border border-line bg-bg/40 px-3 py-2.5 text-sm leading-relaxed text-dim">
               This bid is public and not a charge. You pay only if you are the
-              leader and you click Pay to lock. Your logo goes on the board after
-              I upload it in admin.
+              leader and you click Pay to lock.
             </p>
             <label className="block text-sm">
               <span className="mb-1.5 block text-dim">Brand name</span>
@@ -450,6 +477,24 @@ export function BidModal({
                 placeholder="https://"
                 disabled={ended || busy || spot.locked}
               />
+            </label>
+            <label className="block text-sm">
+              <span className="mb-1.5 block text-dim">Choose file</span>
+              <input
+                type="file"
+                accept={PUBLIC_LOGO_ACCEPT}
+                className="focus-ring block w-full text-sm text-dim file:mr-3 file:rounded-md file:border-0 file:bg-gold file:px-3 file:py-2 file:text-sm file:font-medium file:text-[var(--button-text)]"
+                disabled={ended || busy || spot.locked}
+                onChange={(e) => onLogoFile(e.target.files?.[0] ?? null)}
+              />
+              {logoFileName ? (
+                <span className="mt-1.5 block text-xs text-gold/90">{logoFileName}</span>
+              ) : (
+                <span className="mt-1.5 block text-xs text-dim">
+                  PNG, JPG, or SVG · max 2MB. No file = letter avatar until I add
+                  your logo in admin.
+                </span>
+              )}
             </label>
             <label className="block text-sm">
               <span className="mb-1.5 block text-dim">Bid amount (USD)</span>

@@ -45,7 +45,12 @@ export async function POST(request: Request) {
   }
 
   const buffer = Buffer.from(await file.arrayBuffer());
-  const uploaded = await uploadLogoBuffer(buffer, contentType, ADMIN_MAX_LOGO_BYTES);
+  const uploaded = await uploadLogoBuffer(
+    buffer,
+    contentType,
+    ADMIN_MAX_LOGO_BYTES,
+    ADMIN_ALLOWED,
+  );
   if (!uploaded.ok) {
     return NextResponse.json({ error: uploaded.error }, { status: 500 });
   }
