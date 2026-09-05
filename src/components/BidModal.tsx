@@ -491,8 +491,7 @@ export function BidModal({
                 <span className="mt-1.5 block text-xs text-gold/90">{logoFileName}</span>
               ) : (
                 <span className="mt-1.5 block text-xs text-dim">
-                  PNG, JPG, or SVG · max 2MB. No file = letter avatar until I add
-                  your logo in admin.
+                  Your Logo here
                 </span>
               )}
             </label>
