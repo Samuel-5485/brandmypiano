@@ -6,7 +6,7 @@ export type Bid = {
   brandName: string;
   handle: string;
   website: string;
-  /** Public URL or /logos/... path. Empty/missing = letter avatar until admin pastes a logo. */
+  /** Supabase / local path. Empty = letter avatar until admin uploads. */
   logoUrl?: string;
   /** When true, keep white logo backgrounds (skip near-white knockout). */
   keepBackground?: boolean;

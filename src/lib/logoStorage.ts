@@ -1,6 +1,8 @@
 import { hasSupabaseAdmin, uploadLogo } from "@/lib/supabase/rest";
 
 export const MAX_LOGO_BYTES = 400_000;
+/** Admin logo uploads (PNG / JPG / SVG). */
+export const ADMIN_MAX_LOGO_BYTES = 1_048_576;
 
 const ALLOWED = new Set([
   "image/png",
@@ -44,6 +46,7 @@ export function parseSupabaseError(raw: string, fallback: string): string {
 export async function uploadLogoBuffer(
   buffer: Buffer,
   contentType: string,
+  maxBytes = MAX_LOGO_BYTES,
 ): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
   if (!hasSupabaseAdmin()) {
     return { ok: false, error: "Logo storage is not configured (Supabase env missing)." };
@@ -51,8 +54,9 @@ export async function uploadLogoBuffer(
   if (!ALLOWED.has(contentType)) {
     return { ok: false, error: "Use PNG, JPG, WebP, GIF, or SVG." };
   }
-  if (buffer.length <= 0 || buffer.length > MAX_LOGO_BYTES) {
-    return { ok: false, error: "Logo must be under 400KB." };
+  if (buffer.length <= 0 || buffer.length > maxBytes) {
+    const limitKb = Math.round(maxBytes / 1024);
+    return { ok: false, error: `Logo must be under ${limitKb}KB.` };
   }
 
   try {
@@ -63,33 +67,4 @@ export async function uploadLogoBuffer(
     const error = parseSupabaseError(raw, "Logo upload failed.");
     return { ok: false, error };
   }
-}
-
-
-export async function resolveLogoForBid(input: {
-  logoUrl?: string;
-  file?: File | null;
-}): Promise<{ url: string | null; warning?: string }> {
-  if (input.file && input.file.size > 0) {
-    const buffer = Buffer.from(await input.file.arrayBuffer());
-    const uploaded = await uploadLogoBuffer(buffer, input.file.type || "image/png");
-    if (uploaded.ok) return { url: uploaded.url };
-    return { url: null, warning: `Bid saved, logo failed: ${uploaded.error}` };
-  }
-
-  const logoUrl = String(input.logoUrl ?? "").trim();
-  if (!logoUrl) return { url: null };
-
-  if (/^https:\/\//i.test(logoUrl)) {
-    return { url: logoUrl };
-  }
-
-  if (logoUrl.startsWith("/logos/")) {
-    return { url: logoUrl };
-  }
-
-  return {
-    url: null,
-    warning: "Bid saved, logo failed: logo must be an https URL or Choose file upload.",
-  };
 }

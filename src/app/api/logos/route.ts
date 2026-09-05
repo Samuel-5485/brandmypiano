@@ -1,4 +1,5 @@
 import { apiError, apiOk } from "@/lib/apiResponse";
+import { isAdminAuthenticated } from "@/lib/auth";
 import { uploadLogoBuffer } from "@/lib/logoStorage";
 import { hasSupabaseAdmin } from "@/lib/supabase/rest";
 import { promises as fs } from "fs";
@@ -8,6 +9,10 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
+  if (!(await isAdminAuthenticated())) {
+    return apiError("Unauthorized.", 401);
+  }
+
   let form: FormData;
   try {
     form = await request.formData();

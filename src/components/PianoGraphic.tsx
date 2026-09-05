@@ -95,8 +95,8 @@ export function PianoGraphic({ activeId, spots, onSelect }: Props) {
                       brandName={state.holderBrand}
                       logoUrl={state.holderLogoUrl}
                       knockoutWhite={!state.holderKeepBackground}
-                      className="h-full w-full"
-                      mediaClassName="object-contain text-[8px] sm:text-[10px]"
+                      className="pointer-events-none h-full w-full"
+                      mediaClassName="pointer-events-none object-contain text-[8px] sm:text-[10px]"
                     />
                   </span>
                 ) : (

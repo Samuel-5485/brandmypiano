@@ -408,8 +408,8 @@ function OfferRow({
               <BrandLogo
                 brandName={offer.brandName}
                 logoUrl={offer.logoUrl}
-                className="h-full w-full"
-                mediaClassName={`object-contain ${avatarText}`}
+                className="pointer-events-none h-full w-full"
+                mediaClassName={`pointer-events-none object-contain ${avatarText}`}
               />
             </span>
             <p className="min-w-0 break-words font-medium leading-snug text-cream">
@@ -522,8 +522,8 @@ function SpotRow({
                 brandName={spot.holderBrand!}
                 logoUrl={spot.holderLogoUrl}
                 knockoutWhite={!spot.holderKeepBackground}
-                className="h-full w-full"
-                mediaClassName="text-[10px]"
+                className="pointer-events-none h-full w-full"
+                mediaClassName="pointer-events-none text-[10px]"
               />
             </span>
             <span className="break-words text-cream">{spot.holderBrand}</span>

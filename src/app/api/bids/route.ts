@@ -7,7 +7,6 @@ import {
   normalizeHandle,
   validateNewBidAmount,
 } from "@/lib/auction";
-import { resolveLogoForBid } from "@/lib/logoStorage";
 import { BoardLoadError, newBidId, readAuctionFile, withAuctionLock } from "@/lib/store";
 import type { Bid } from "@/lib/types";
 
@@ -29,35 +28,24 @@ type BidBody = {
   brandName?: string;
   handle?: string;
   website?: string;
-  logoUrl?: string;
   amount?: number;
 };
 
-async function parseBidRequest(request: Request): Promise<{
-  body: BidBody;
-  file: File | null;
-}> {
+async function parseBidRequest(request: Request): Promise<BidBody> {
   const contentType = request.headers.get("content-type") ?? "";
   if (contentType.includes("multipart/form-data")) {
     const form = await request.formData();
-    const rawFile = form.get("file");
-    const file = rawFile instanceof File && rawFile.size > 0 ? rawFile : null;
     return {
-      body: {
-        spotId: Number(form.get("spotId")),
-        brandName: String(form.get("brandName") ?? ""),
-        handle: String(form.get("handle") ?? ""),
-        website: String(form.get("website") ?? ""),
-        logoUrl: String(form.get("logoUrl") ?? ""),
-        amount: Number(form.get("amount")),
-      },
-      file,
+      spotId: Number(form.get("spotId")),
+      brandName: String(form.get("brandName") ?? ""),
+      handle: String(form.get("handle") ?? ""),
+      website: String(form.get("website") ?? ""),
+      amount: Number(form.get("amount")),
     };
   }
 
   try {
-    const body = (await request.json()) as BidBody;
-    return { body, file: null };
+    return (await request.json()) as BidBody;
   } catch {
     throw new Error("Invalid JSON body.");
   }
@@ -96,9 +84,8 @@ export async function POST(request: Request) {
     }
 
     let body: BidBody;
-    let file: File | null;
     try {
-      ({ body, file } = await parseBidRequest(request));
+      body = await parseBidRequest(request);
     } catch (err) {
       return jsonErr(err instanceof Error ? err.message : "Invalid request body.", 400);
     }
@@ -113,7 +100,6 @@ export async function POST(request: Request) {
     const handle = normalizeHandle(String(body.handle ?? ""));
     const website = String(body.website ?? "").trim();
     const amount = Number(body.amount);
-    const logoUrlInput = String(body.logoUrl ?? "").trim();
 
     if (brandName.length < 2) {
       return jsonErr("Brand name must be at least 2 characters.", 400);
@@ -124,17 +110,6 @@ export async function POST(request: Request) {
     if (website && !/^https?:\/\//i.test(website)) {
       return jsonErr("Website must start with http:// or https://.", 400);
     }
-    if (logoUrlInput.startsWith("data:")) {
-      return jsonErr(
-        "Logo URL cannot be base64 data. Use Choose file or an https:// URL.",
-        400,
-      );
-    }
-    if (logoUrlInput && !/^https:\/\//i.test(logoUrlInput) && !logoUrlInput.startsWith("/logos/")) {
-      return jsonErr("Logo URL must start with https://", 400);
-    }
-
-    const logo = await resolveLogoForBid({ logoUrl: logoUrlInput, file });
 
     const outcome = await withAuctionLock(async (auctionFile) => {
       const locked = auctionFile.lockedSpotIds ?? [];
@@ -148,7 +123,6 @@ export async function POST(request: Request) {
         brandName,
         handle,
         website,
-        logoUrl: logo.url ?? undefined,
         amount,
         deposit: calcDeposit(amount),
         status: "pending",
@@ -173,7 +147,6 @@ export async function POST(request: Request) {
     return jsonOk({
       ok: true,
       bid: slimBid(savedBid),
-      ...(logo.warning ? { warning: logo.warning } : {}),
     });
   } catch (err) {
     if (err instanceof BoardLoadError) {

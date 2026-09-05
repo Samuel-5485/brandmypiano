@@ -25,7 +25,6 @@ export default function AdminPage() {
     brandName: "",
     handle: "",
     website: "",
-    logoUrl: "",
     amount: "",
     status: "confirmed",
   });
@@ -185,7 +184,6 @@ export default function AdminPage() {
               brandName: manual.brandName,
               handle: manual.handle,
               website: manual.website,
-              logoUrl: manual.logoUrl,
               amount: Number(manual.amount),
               status: manual.status,
             });
@@ -220,12 +218,6 @@ export default function AdminPage() {
             placeholder="https:// website"
             value={manual.website}
             onChange={(e) => setManual({ ...manual, website: e.target.value })}
-            className="focus-ring rounded-md border border-line bg-card px-3 py-2 text-cream"
-          />
-          <input
-            placeholder="Logo URL"
-            value={manual.logoUrl}
-            onChange={(e) => setManual({ ...manual, logoUrl: e.target.value })}
             className="focus-ring rounded-md border border-line bg-card px-3 py-2 text-cream"
           />
           <input
@@ -272,6 +264,7 @@ export default function AdminPage() {
           act({ action: "delete", id });
         }}
         onUpdate={(id, patch) => act({ action: "update", id, ...patch })}
+        onReload={load}
       />
     </main>
   );
@@ -290,6 +283,7 @@ function BidTable({
   onReject,
   onDelete,
   onUpdate,
+  onReload,
 }: {
   title: string;
   bids: Bid[];
@@ -303,6 +297,7 @@ function BidTable({
   onReject: (id: string) => void;
   onDelete: (id: string) => void;
   onUpdate: (id: string, patch: Record<string, unknown>) => void;
+  onReload: () => void;
 }) {
   return (
     <section className="mt-10">
@@ -314,7 +309,7 @@ function BidTable({
             <tr>
               <th className="px-3 py-2">Spot</th>
               <th className="px-3 py-2">Brand / handle</th>
-              <th className="px-3 py-2">Logo URL</th>
+              <th className="px-3 py-2">Logo</th>
               <th className="px-3 py-2">Amount</th>
               <th className="px-3 py-2">Deposit</th>
               <th className="px-3 py-2">Status</th>
@@ -365,11 +360,17 @@ function BidTable({
                 <td className="px-3 py-3">
                   <AdminLogoField
                     key={`${bid.id}-${bid.logoUrl ?? ""}-${bid.keepBackground ? "1" : "0"}`}
+                    bidId={bid.id}
                     spotId={bid.spotId}
                     brandName={bid.brandName}
-                    initialUrl={bid.logoUrl ?? ""}
-                    initialKeepBackground={Boolean(bid.keepBackground)}
-                    onCommit={(patch) => onUpdate(bid.id, patch)}
+                    logoUrl={bid.logoUrl?.trim() ? bid.logoUrl.trim() : null}
+                    keepBackground={Boolean(bid.keepBackground)}
+                    disabled={busy}
+                    onKeepBackgroundChange={(keep) =>
+                      onUpdate(bid.id, { keepBackground: keep })
+                    }
+                    onSaved={() => onReload()}
+                    onRemoved={() => onReload()}
                   />
                 </td>
                 <td className="px-3 py-3">

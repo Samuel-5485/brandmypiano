@@ -121,6 +121,26 @@ export async function POST(request: Request) {
 
   const action = body.action;
 
+  if (action === "remove_logo") {
+    const id = String(body.id ?? "");
+    const outcome = await withAuctionLock(async (file) => {
+      const idx = file.bids.findIndex((b) => b.id === id);
+      if (idx < 0) return { error: "Bid not found." };
+      const nextBids = [...file.bids];
+      const now = new Date().toISOString();
+      nextBids[idx] = {
+        ...nextBids[idx]!,
+        logoUrl: "",
+        updatedAt: now,
+      };
+      return { result: nextBids[idx]!, file: { ...file, bids: nextBids } };
+    });
+    if ("error" in outcome) {
+      return NextResponse.json({ error: outcome.error }, { status: 400 });
+    }
+    return NextResponse.json({ ok: true, bid: outcome.result });
+  }
+
   if (action === "confirm_payment") {
     const id = String(body.id ?? "");
     const outcome = await withAuctionLock(async (file) => {

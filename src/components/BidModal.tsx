@@ -18,39 +18,6 @@ type Props = {
   onSubmitted: () => void | Promise<void>;
 };
 
-function logoUrlHint(logoUrl: string, logoFile: File | null) {
-  if (logoFile) {
-    return { text: "Using the uploaded file.", tone: "dim" as const, preview: null };
-  }
-  const value = logoUrl.trim();
-  if (!value) {
-    return {
-      text: "Optional. Upload a file or paste an https:// image.",
-      tone: "dim" as const,
-      preview: null,
-    };
-  }
-  if (value.startsWith("data:")) {
-    return {
-      text: "Use Choose file or an https:// link, not pasted image code.",
-      tone: "error" as const,
-      preview: null,
-    };
-  }
-  if (value.startsWith("https://")) {
-    return {
-      text: "We'll use this logo.",
-      tone: "ok" as const,
-      preview: value,
-    };
-  }
-  return {
-    text: "Logo URL must start with https://",
-    tone: "error" as const,
-    preview: null,
-  };
-}
-
 export function BidModal({
   spot,
   open,
@@ -65,9 +32,6 @@ export function BidModal({
   const [brandName, setBrandName] = useState("");
   const [handle, setHandle] = useState("");
   const [website, setWebsite] = useState("");
-  const [logoUrl, setLogoUrl] = useState("");
-  const [logoFile, setLogoFile] = useState<File | null>(null);
-  const [logoFileName, setLogoFileName] = useState("");
   const [amount, setAmount] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -100,9 +64,6 @@ export function BidModal({
     setBrandName("");
     setHandle(saved);
     setWebsite("");
-    setLogoUrl("");
-    setLogoFile(null);
-    setLogoFileName("");
     setAmount(String(prefillAmount ?? currentSpot?.minNextBid ?? ""));
     setError("");
     setDone(null);
@@ -135,19 +96,6 @@ export function BidModal({
     done?.isLeader && paymentLink && done.amount > 0
       ? lockPaymentUrl(paymentLink, done.amount)
       : "";
-  const logoHint = logoUrlHint(logoUrl, logoFile);
-
-  function onLogoFile(file: File | null) {
-    if (!file) {
-      setLogoFile(null);
-      setLogoFileName("");
-      return;
-    }
-    setLogoFile(file);
-    setLogoFileName(file.name);
-    setLogoUrl("");
-    setError("");
-  }
 
   async function bidVisibleOnBoard(
     targetSpotId: number,
@@ -228,29 +176,21 @@ export function BidModal({
       setError("This spot is locked.");
       return;
     }
-    const trimmedLogoUrl = logoUrl.trim();
-    if (trimmedLogoUrl.startsWith("data:")) {
-      setError("Use Choose file or an https:// URL — not a pasted base64 image.");
-      return;
-    }
-    if (trimmedLogoUrl && !trimmedLogoUrl.startsWith("https://")) {
-      setError("Logo URL must start with https://");
-      return;
-    }
 
     setBusy(true);
     setError("");
     try {
-      const formData = new FormData();
-      formData.append("spotId", String(spot!.spotId));
-      formData.append("brandName", brandName);
-      formData.append("handle", normalizedHandle);
-      formData.append("website", website);
-      formData.append("amount", String(amount));
-      if (trimmedLogoUrl) formData.append("logoUrl", trimmedLogoUrl);
-      if (logoFile) formData.append("file", logoFile);
-
-      const res = await fetch("/api/bids", { method: "POST", body: formData });
+      const res = await fetch("/api/bids", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          spotId: spot!.spotId,
+          brandName: brandName.trim(),
+          handle: normalizedHandle,
+          website: website.trim(),
+          amount: Number(amount),
+        }),
+      });
       const text = await res.text();
       const bidAmount = Number(amount);
 
@@ -476,7 +416,8 @@ export function BidModal({
             )}
             <p className="rounded-md border border-line bg-bg/40 px-3 py-2.5 text-sm leading-relaxed text-dim">
               This bid is public and not a charge. You pay only if you are the
-              leader and you click Pay to lock.
+              leader and you click Pay to lock. Your logo goes on the board after
+              I upload it in admin.
             </p>
             <label className="block text-sm">
               <span className="mb-1.5 block text-dim">Brand name</span>
@@ -509,56 +450,6 @@ export function BidModal({
                 placeholder="https://"
                 disabled={ended || busy || spot.locked}
               />
-            </label>
-            <label className="block text-sm">
-              <span className="mb-1.5 block text-dim">Logo URL (optional)</span>
-              <input
-                value={logoUrl}
-                onChange={(e) => {
-                  setLogoUrl(e.target.value);
-                  setLogoFile(null);
-                  setLogoFileName("");
-                  setError("");
-                }}
-                className="focus-ring w-full rounded-md border border-line bg-bg px-3 py-3 text-cream"
-                placeholder="https://…/logo.png"
-                disabled={ended || busy || spot.locked || Boolean(logoFile)}
-              />
-              <p
-                className={
-                  logoHint.tone === "error"
-                    ? "mt-1.5 text-xs text-red-200"
-                    : logoHint.tone === "ok"
-                      ? "mt-1.5 text-xs text-gold/90"
-                      : "mt-1.5 text-xs text-dim"
-                }
-              >
-                {logoHint.text}
-              </p>
-              {logoHint.preview && (
-                /* eslint-disable-next-line @next/next/no-img-element */
-                <img
-                  src={logoHint.preview}
-                  alt=""
-                  className="mt-2 h-10 w-10 rounded border border-line object-contain bg-bg"
-                  onError={(e) => {
-                    e.currentTarget.style.display = "none";
-                  }}
-                />
-              )}
-            </label>
-            <label className="block text-sm">
-              <span className="mb-1.5 block text-dim">Or upload a logo (optional)</span>
-              <input
-                type="file"
-                accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
-                className="focus-ring block w-full text-sm text-dim file:mr-3 file:rounded-md file:border-0 file:bg-gold file:px-3 file:py-2 file:text-sm file:font-medium file:text-[var(--button-text)]"
-                disabled={ended || busy || spot.locked}
-                onChange={(e) => onLogoFile(e.target.files?.[0] ?? null)}
-              />
-              {logoFileName && (
-                <span className="mt-1.5 block text-xs text-dim">{logoFileName}</span>
-              )}
             </label>
             <label className="block text-sm">
               <span className="mb-1.5 block text-dim">Bid amount (USD)</span>
